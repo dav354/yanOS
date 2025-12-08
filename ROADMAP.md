@@ -13,27 +13,27 @@
 - [x] **Observability Endpoints:** Implement `/healthz` and `/readyz` for uptime/status checks.
 
 ### 1.2 Secure Web Server & API Spec
-- [ ] **TLS Bootstrap:** Integrate `rcgen` crate. On startup, check for `cert.pem`; if missing, generate a self-signed certificate.
-- [ ] **HTTPS Enforcement:** Configure Axum to listen on 443 (or 8443) with `rustls`. Redirect HTTP to HTTPS.
-- [ ] **Certificate Storage:** Persist `cert.pem`/`key.pem` at `/etc/opt/storage-os/tls` (mode 600) and allow reload when replaced by user.
-- [ ] **OpenAPI (Swagger):**
-  - [ ] Integrate `utoipa` crate.
-  - [ ] Configure `/swagger-ui` route.
-- [ ] **Error Handling:** Define a global `AppError` enum mapping to HTTP status codes.
+- [x] **TLS Bootstrap:** Integrate `rcgen` crate. On startup, check for `cert.pem`; if missing, generate a self-signed certificate.
+- [x] **HTTPS Enforcement:** Configure Axum to listen on 443 (or 8443) with `rustls`. Redirect HTTP to HTTPS.
+- [x] **Certificate Storage:** Persist `cert.pem`/`key.pem` at `/etc/opt/storage-os/tls` (mode 600) and allow reload when replaced by user.
+- [x] **OpenAPI (Swagger):**
+  - [x] Integrate `utoipa` crate.
+  - [x] Configure `/swagger-ui` route.
+- [x] **Error Handling:** Define a global `AppError` enum mapping to HTTP status codes.
 
 ### 1.3 Authentication (PAM & Cookies)
-- [ ] **PAM Binding:** Integrate `pam` crate for system user authentication.
-- [ ] **Session Management:**
-  - [ ] Implement **HttpOnly, Secure, SameSite=Lax** cookies using `tower-sessions` (MemoryStore).
-  - [ ] Implement CSRF protection middleware.
-  - [ ] Abstract session storage so MemoryStore can be swapped for file/redis without handler changes.
-- [ ] **Login Endpoint:** `POST /api/login` (Validates PAM, creates Session, sets Cookie).
-- [ ] **Frontend Auth:** Svelte 5 store for session state (relying on browser cookie handling).
+- [x] **PAM Binding:** Integrate `pam` crate for system user authentication.
+- [x] **Session Management:**
+  - [x] Implement **HttpOnly, Secure, SameSite=Lax** cookies using `tower-sessions` (MemoryStore).
+  - [x] Implement CSRF protection middleware.
+  - [x] Abstract session storage so MemoryStore can be swapped for file/redis without handler changes.
+- [x] **Login Endpoint:** `POST /api/login` (Validates PAM, creates Session, sets Cookie).
+- [x] **Frontend Auth:** Svelte 5 store for session state (relying on browser cookie handling).
 
 ### 1.4 Service Integration
-- [ ] **Service User:** Define the user (e.g., `webservd`) the binary will run as.
-- [ ] **SMF Manifest:** Create the XML manifest to manage the Rust binary as a service (`svccfg import`), set least `privileges`/`limit_privileges`, and ensure TLS key presence as a dependency.
-- [ ] **Readiness:** `/readyz` must verify TLS material is loaded and session storage is available.
+- [x] **Service User:** Define the user (e.g., `webservd`) the binary will run as.
+- [x] **SMF Manifest:** Create the XML manifest to manage the Rust binary as a service (`svccfg import`), set least `privileges`/`limit_privileges`, and ensure TLS key presence as a dependency.
+- [x] **Readiness:** `/readyz` must verify TLS material is loaded and session storage is available.
 
 ---
 

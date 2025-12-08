@@ -193,10 +193,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum_csrf"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "159933b8c6d6c161cc8d6e1dc6ba7977e8b741dbf27f7294054d3ab1ca944f54"
+dependencies = [
+ "async-trait",
+ "axum-core",
+ "base64ct",
+ "cookie",
+ "hmac",
+ "http",
+ "rand 0.8.5",
+ "sha2",
+ "thiserror",
+ "time",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "base64ct"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e050f626429857a27ddccb31e0aca21356bfa709c04041aefddac081a8f068a"
 
 [[package]]
 name = "bindgen"
@@ -2952,6 +2978,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "axum-server",
+ "axum_csrf",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",

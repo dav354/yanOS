@@ -1,6 +1,7 @@
 // backend/src/api.rs
 
 use axum::{routing::get, Json, Router};
+use axum_csrf::{CsrfConfig, CsrfToken};
 use serde_json::{json, Value};
 use tracing::{info, instrument};
 use utoipa::OpenApi;
@@ -32,12 +33,15 @@ use crate::auth;
 pub struct ApiDoc;
 
 /// Creates the main API router, including the Swagger UI.
-pub fn create_router() -> Router {
+pub fn create_router(csrf_config: CsrfConfig) -> Router {
+    let api_routes: Router<CsrfConfig> = Router::new().route("/status", get(api_status));
+
     Router::new()
         .route("/healthz", get(healthz_handler))
         .route("/readyz", get(readyz_handler))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .nest("/api/v1", Router::new().route("/status", get(api_status)))
+        .nest("/api/v1", api_routes)
+        .with_state(csrf_config)
 }
 
 /// Liveness probe endpoint.
@@ -63,8 +67,14 @@ async fn healthz_handler() -> Json<Value> {
 )]
 #[instrument]
 async fn readyz_handler() -> Json<Value> {
-    // In the future, this will check for TLS certs and session storage.
-    Json(json!({ "status": "ready" }))
+    let cert_path = std::path::Path::new("/etc/opt/storage-os/tls/cert.pem");
+    let key_path = std::path::Path::new("/etc/opt/storage-os/tls/key.pem");
+
+    if cert_path.exists() && key_path.exists() {
+        Json(json!({ "status": "ready" }))
+    } else {
+        Json(json!({ "status": "not_ready", "error": "TLS certificates missing" }))
+    }
 }
 
 /// Get the current status of the API.
@@ -75,8 +85,11 @@ async fn readyz_handler() -> Json<Value> {
         (status = 200, description = "API is running", body = Value)
     )
 )]
-#[instrument]
-async fn api_status() -> Json<Value> {
+#[instrument(skip(token))]
+async fn api_status(token: CsrfToken) -> Json<Value> {
     info!("Responding to API status check");
-    Json(json!({ "status": "ok" }))
+    Json(json!({
+        "status": "ok",
+        "csrf_token": token.authenticity_token().unwrap_or_default()
+    }))
 }

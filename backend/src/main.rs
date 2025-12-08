@@ -1,4 +1,5 @@
 use axum::response::Redirect;
+use axum_csrf::CsrfLayer;
 use axum_server::tls_rustls::RustlsConfig;
 use opentelemetry::{global, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
@@ -72,9 +73,11 @@ async fn main() -> Result<(), AppError> {
     .await?;
 
     let session_layer = auth::create_session_layer();
-    let app = api::create_router();
+    let csrf_config = auth::create_csrf_config();
+    let app = api::create_router(csrf_config.clone());
 
     let app = auth::add_auth_routes(app)
+        .layer(CsrfLayer::new(csrf_config))
         .layer(session_layer)
         .layer(CookieManagerLayer::new());
 

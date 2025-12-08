@@ -1,6 +1,7 @@
 // backend/src/auth.rs
 
 use axum::{routing::post, Json, Router};
+use axum_csrf::{CsrfConfig, CsrfLayer};
 use rand::RngCore;
 use serde::Deserialize;
 use time::Duration;
@@ -17,6 +18,18 @@ use crate::error::AppError;
 pub struct LoginPayload {
     username: String,
     password: String,
+}
+
+/// Creates the CSRF configuration.
+pub fn create_csrf_config() -> CsrfConfig {
+    let mut key = [0u8; 32];
+    rand::rng().fill_bytes(&mut key);
+
+    CsrfConfig::default()
+        .with_key(Some(axum_csrf::Key::from(&key)))
+        .with_cookie_path("/")
+        .with_cookie_name("XSRF-TOKEN")
+        .with_lifetime(time::Duration::hours(1))
 }
 
 /// Creates the session management layer for the application.
