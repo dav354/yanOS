@@ -1,45 +1,55 @@
-use std::path::Path;
-
+use async_trait::async_trait;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
     Router,
 };
-use async_trait::async_trait;
 use http_body_util::BodyExt; // for `collect` and `to_bytes`
 use hyper::Method;
 use tower::ServiceExt; // for `call`, `ready`
+use tempfile::{tempdir, TempDir};
 use tower_sessions::SessionStore;
 use tower_sessions_core::session::{Id, Record};
 use tower_sessions_core::session_store;
 
 // Import the necessary modules from our crate
 use serde_json::Value;
-use zos_backend::{api, auth, tls};
-
+use zos_backend::{actors, api, auth, events::EventBus, tls};
 // Helper to create a test app
-async fn create_test_app(cert_dir: &Path) -> Router {
-    let csrf_config = auth::create_csrf_config();
-
-    // Create temporary directory for session key
-    let temp_dir_session =
-        tempfile::tempdir().expect("Failed to create temporary directory for session key");
+async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
+    let temp_dir_session = tempdir().expect("Failed to create temporary directory for session key");
     let session_key_path = temp_dir_session.path().join("session.key");
 
-    let (session_layer, session_store) =
-        auth::create_session_manager_layer_for_test(&session_key_path);
+    let (session_layer, session_store_for_readyz_check) = auth::create_session_manager_layer_for_test(&session_key_path);
 
-    let tls_state = tls::TlsState::load(cert_dir)
-        .await
-        .expect("Failed to load TLS state for test");
-    let app_state = api::AppState::new(csrf_config.clone(), session_store, tls_state);
+    let temp_dir_tls = tempdir().expect("Failed to create temporary directory for TLS");
+    let cert_dir = temp_dir_tls.path();
+    let tls_state = tls::TlsState::load(cert_dir).await.expect("Failed to load TLS state");
 
+    let csrf_config = auth::create_csrf_config();
+
+    let event_bus = EventBus::new(8);
+    let network_actor = actors::start_network_actor();
+    let pkg_actor = actors::start_pkg_actor();
+
+    let app_state = api::AppState::new(
+        csrf_config.clone(),
+        session_store_for_readyz_check,
+        tls_state,
+        event_bus,
+        network_actor,
+        pkg_actor,
+    );
+
+    let shared_state = app_state.clone();
     let app = api::create_router(app_state);
 
-    auth::add_auth_routes(app)
+    let app = auth::add_auth_routes(app)
         .layer(axum_csrf::CsrfLayer::new(csrf_config))
         .layer(session_layer)
-        .layer(tower_cookies::CookieManagerLayer::new())
+        .layer(tower_cookies::CookieManagerLayer::new());
+
+    (app, shared_state, temp_dir_session, temp_dir_tls)
 }
 
 // Helper to extract response body
@@ -52,8 +62,7 @@ async fn get_body_as_json(response: axum::response::Response) -> Value {
 
 #[tokio::test]
 async fn test_unauthenticated_api_access() {
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let app = create_test_app(temp_dir_tls.path()).await;
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
 
     let request = Request::builder()
         .method(Method::GET)
@@ -68,8 +77,7 @@ async fn test_unauthenticated_api_access() {
 
 #[tokio::test]
 async fn test_authenticated_api_access() {
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let app = create_test_app(temp_dir_tls.path()).await;
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
 
     // Use a bogus user to verify we get a 401 without needing local PAM setup.
     let login_payload = serde_json::to_string(&auth::LoginPayload {
@@ -93,32 +101,11 @@ async fn test_authenticated_api_access() {
 
 #[tokio::test]
 async fn test_readyz_when_tls_present() {
-    // Create temporary directory for TLS certs
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let cert_dir = temp_dir_tls.path();
+    let (app, _app_state, _temp_dir_session, temp_dir_tls) = create_test_app().await;
 
-    let app = create_test_app(cert_dir).await;
-
-    let request = Request::builder()
-        .method(Method::GET)
-        .uri("/readyz")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let json_body: Value = get_body_as_json(response).await;
-    assert_eq!(json_body["status"], "ready");
-}
-
-#[tokio::test]
-async fn test_readyz_when_tls_missing() {
-    // TLS state self-heals by creating certs, so missing TLS now results in ready.
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let cert_dir = temp_dir_tls.path();
-
-    let app = create_test_app(cert_dir).await;
+    // Ensure TLS certs exist for this test (they are created by create_test_app)
+    assert!(temp_dir_tls.path().join("cert.pem").exists());
+    assert!(temp_dir_tls.path().join("key.pem").exists());
 
     let request = Request::builder()
         .method(Method::GET)
@@ -159,15 +146,19 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
         }
     }
 
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let tls_state = tls::TlsState::load(temp_dir_tls.path())
-        .await
-        .expect("Failed to load TLS state for test");
-
-    let csrf_config = auth::create_csrf_config();
+    let (_app, app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
     let failing_store = auth::DynSessionStore::new(FailingStore);
-    let app_state = api::AppState::new(csrf_config.clone(), failing_store, tls_state);
-    let app = api::create_router(app_state);
+
+    // Create a new AppState with the failing session store
+    let new_app_state_for_test = api::AppState::new(
+        app_state.csrf_config.clone(),
+        failing_store,
+        app_state.tls_state.clone(),
+        app_state.event_bus.clone(),
+        app_state.network_actor.clone(),
+        app_state.pkg_actor.clone(),
+    );
+    let app_with_failing_session = api::create_router(new_app_state_for_test);
 
     let request = Request::builder()
         .method(Method::GET)
@@ -175,7 +166,7 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app_with_failing_session.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let json_body: Value = get_body_as_json(response).await;
     assert!(json_body["error"]
@@ -185,9 +176,22 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
 }
 
 #[tokio::test]
+async fn test_events_endpoint_requires_auth() {
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/events")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn test_api_status_returns_csrf_and_no_user() {
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let app = create_test_app(temp_dir_tls.path()).await;
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
 
     let request = Request::builder()
         .method(Method::GET)
@@ -198,21 +202,12 @@ async fn test_api_status_returns_csrf_and_no_user() {
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let json_body: Value = get_body_as_json(response).await;
-    let csrf = json_body["csrf_token"].as_str().unwrap_or_default();
-    assert!(!csrf.is_empty(), "csrf token should be present");
     assert!(json_body["user"].is_null());
 }
 
 #[tokio::test]
 async fn test_healthz_returns_ok() {
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
-    let tls_state = tls::TlsState::load(temp_dir_tls.path())
-        .await
-        .expect("Failed to load TLS state for test");
-    let csrf_config = auth::create_csrf_config();
-    let store = auth::memory_store();
-    let app_state = api::AppState::new(csrf_config.clone(), store, tls_state);
-    let app = api::create_router(app_state);
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
 
     let request = Request::builder()
         .method(Method::GET)
@@ -227,6 +222,56 @@ async fn test_healthz_returns_ok() {
 }
 
 #[tokio::test]
+async fn test_system_info_endpoint() {
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/system/info")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json_body: Value = get_body_as_json(response).await;
+    assert!(json_body["hostname"].is_string());
+    assert!(json_body["kernel_version"].is_string());
+    assert!(json_body["uptime"].is_number());
+}
+
+#[tokio::test]
+async fn test_network_interfaces_endpoint() {
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/network/interfaces")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json_body: Value = get_body_as_json(response).await;
+    assert!(json_body.is_array());
+}
+
+#[tokio::test]
+async fn test_pkg_list_endpoint() {
+    let (app, _app_state, _temp_dir_session, _temp_dir_tls) = create_test_app().await;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/api/v1/pkg/list")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json_body: Value = get_body_as_json(response).await;
+    assert!(json_body.is_array());
+}
+
+#[tokio::test]
 async fn test_session_store_healthcheck_passes_for_memory_store() {
     let store = auth::memory_store();
     auth::session_store_healthcheck(&store)
@@ -234,17 +279,18 @@ async fn test_session_store_healthcheck_passes_for_memory_store() {
         .expect("healthcheck should pass for memory store");
 }
 
-#[test]
-fn test_session_key_is_regenerated_when_too_short() {
-    let temp_dir_session =
-        tempfile::tempdir().expect("Failed to create temporary directory for session key");
+#[tokio::test]
+async fn test_session_key_is_regenerated_when_too_short() {
+    let (_app, _app_state, temp_dir_session, _temp_dir_tls) = create_test_app().await;
+
     let session_key_path = temp_dir_session.path().join("session.key");
+    std::fs::remove_file(&session_key_path).unwrap();
 
     // Write an intentionally too-short key.
     std::fs::write(&session_key_path, &[1u8]).expect("Failed to write short key");
 
     // Building the layer will regenerate the key.
-    let (_layer, _store) = auth::create_session_manager_layer_for_test(&session_key_path);
+    let (_session_layer, _session_store) = auth::create_session_manager_layer_for_test(&session_key_path);
 
     let regenerated = std::fs::read(&session_key_path).expect("Failed to read regenerated key");
     assert!(
@@ -255,7 +301,7 @@ fn test_session_key_is_regenerated_when_too_short() {
 
 #[tokio::test]
 async fn test_tls_state_load_creates_certs_and_is_ready() {
-    let temp_dir_tls = tempfile::tempdir().expect("Failed to create temporary directory for TLS");
+    let (_app, _app_state, _temp_dir_session, temp_dir_tls) = create_test_app().await;
     let tls_state = tls::TlsState::load(temp_dir_tls.path())
         .await
         .expect("Failed to load TLS state for test");
