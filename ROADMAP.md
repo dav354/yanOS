@@ -1,0 +1,159 @@
+# Roadmap
+
+## Phase 1: The Secure Foundation (Architecture & API)
+*Establish the technical backbone with security and observability from day one.*
+
+### 1.1 Project Setup & Tooling
+- [ ] **Init Rust Workspace:** Run `cargo new` with the structure: `core` (Types), `api` (Web Server), `adapters` (OS Interaction).
+- [ ] **Build System:** Create a `justfile` for commands like `just run` or `just build-ui`.
+- [ ] **Logging & Tracing:**
+  - [ ] Configure `tracing` and `tracing-subscriber`.
+  - [ ] Configure **OpenTelemetry (OTel)** layer.
+  - [ ] Enable structured JSON logging.
+- [ ] **Observability Endpoints:** Implement `/healthz` and `/readyz` for uptime/status checks.
+
+### 1.2 Secure Web Server & API Spec
+- [ ] **TLS Bootstrap:** Integrate `rcgen` crate. On startup, check for `cert.pem`; if missing, generate a self-signed certificate.
+- [ ] **HTTPS Enforcement:** Configure Axum to listen on 443 (or 8443) with `rustls`. Redirect HTTP to HTTPS.
+- [ ] **Certificate Storage:** Persist `cert.pem`/`key.pem` at `/etc/opt/storage-os/tls` (mode 600) and allow reload when replaced by user.
+- [ ] **OpenAPI (Swagger):**
+  - [ ] Integrate `utoipa` crate.
+  - [ ] Configure `/swagger-ui` route.
+- [ ] **Error Handling:** Define a global `AppError` enum mapping to HTTP status codes.
+
+### 1.3 Authentication (PAM & Cookies)
+- [ ] **PAM Binding:** Integrate `pam` crate for system user authentication.
+- [ ] **Session Management:**
+  - [ ] Implement **HttpOnly, Secure, SameSite=Lax** cookies using `tower-sessions` (MemoryStore).
+  - [ ] Implement CSRF protection middleware.
+  - [ ] Abstract session storage so MemoryStore can be swapped for file/redis without handler changes.
+- [ ] **Login Endpoint:** `POST /api/login` (Validates PAM, creates Session, sets Cookie).
+- [ ] **Frontend Auth:** Svelte 5 store for session state (relying on browser cookie handling).
+
+### 1.4 Service Integration
+- [ ] **Service User:** Define the user (e.g., `webservd`) the binary will run as.
+- [ ] **SMF Manifest:** Create the XML manifest to manage the Rust binary as a service (`svccfg import`), set least `privileges`/`limit_privileges`, and ensure TLS key presence as a dependency.
+- [ ] **Readiness:** `/readyz` must verify TLS material is loaded and session storage is available.
+
+---
+
+## Phase 2: System Management & Reconciliation
+*Develop the management tools and ensure UI state matches System state.*
+
+### 2.1 Reconciliation & Actors
+- [ ] **File Watchers:** Implement `notify` crate to watch `/etc/` for external changes.
+- [ ] **Global State Sync:** Mechanism to push "External Change Detected" events to the UI via WebSocket.
+- [ ] **PkgActor:** Create an Actor to serialize package operations (prevent parallel updates).
+- [ ] **NetworkActor:** Create an Actor to serialize `ipadm`/`dladm` calls.
+- [ ] **SMF/ZFS Polling:** Periodically poll `svcs -H`/`svcs -xv` for managed FMRIs and `zpool status`/`zpool list` to detect external changes; feed results into actor messages.
+
+### 2.2 The Lifesaver: Secure Web Shell
+- [ ] **Backend:** Spawn `ttyd` as a subprocess.
+- [ ] **Proxy:** Implement Secure WebSocket (WSS) upgrade in Axum and pipe to `ttyd`.
+- [ ] **Security:** Validate Session Cookie during WebSocket handshake.
+- [ ] **Privilege Boundary:** Run `ttyd` under the service user with a constrained env/path; document binary location.
+- [ ] **UI:** Embed `xterm.js`.
+
+### 2.3 Dashboard & Metrics
+- [ ] **System Info:** Read Hostname, Kernel, Uptime.
+- [ ] **Live Metrics:** Push CPU/RAM usage via WSS (start with `kstat` CLI parsing; plan `libkstat` FFI later for performance).
+- [ ] **UI:** Svelte 5 Runes-based dashboard components.
+- [ ] **Metrics Endpoint:** Expose `/metrics` in Prometheus format alongside tracing/OTel exporters.
+
+### 2.4 Lifecycle & Safe Updates
+- [ ] **Boot Environments (BE):** Wrapper for `beadm list`, `beadm create`, `beadm activate`.
+- [ ] **Safe Update Logic (PkgActor):**
+  1. Clone current BE.
+  2. Mount new BE.
+  3. Run `pkg -R <altroot> update`.
+  4. Run `bootadm update-archive -R <altroot>`.
+  5. Activate new BE.
+- [ ] **UI:** "Update System" button streaming logs from the Actor.
+- [ ] **Power:** Reboot/Shutdown endpoints.
+
+### 2.5 Network Manager
+- [ ] **Read:** Parse `dladm show-phys` and `ipadm show-addr`.
+- [ ] **Write (NetworkActor):** Change IPs, Gateway, DNS (`/etc/resolv.conf`).
+
+---
+
+## Phase 3: The Storage Core (ZFS)
+*The core engine. High concurrency safety required.*
+
+### 3.1 Architecture: ZFS Actor
+- [ ] **Actor Setup:** `ZfsActor` receiving messages (`CreatePool`, `Scrub`, `SetProp`).
+- [ ] **Serialization:** Ensure ZFS commands are processed sequentially to avoid race conditions.
+- [ ] **Polling:** Background task to periodically poll `zpool status` and detect external CLI changes.
+- [ ] **FFI Plan:** Start with CLI parsing; migrate hot paths to `libzfs`/`libbe` FFI once correctness is validated.
+
+### 3.2 Observability: DTrace (USDT)
+- [ ] **Hooks:** Integrate `usdt` crate.
+- [ ] **Probes:** Insert `dtrace_probe!` before/after expensive ZFS ops.
+
+### 3.3 Hardware & Disks
+- [ ] **Discovery:** List disks (`format`, `sata`, `nvme`).
+- [ ] **SMART:** Wrapper for `smartctl` (JSON output). UI Health Badges.
+
+### 3.4 Pool Management
+- [ ] **Read:** Parse `zpool status`/`list`.
+- [ ] **Write:** Wizard for Stripe, Mirror, RAIDZ1/2/3.
+- [ ] **Actions:** Scrub, Export, Import.
+
+### 3.5 Dataset Management
+- [ ] **Hierarchy:** Tree view of datasets.
+- [ ] **Properties:** Compression, Quota, Mountpoints.
+
+---
+
+## Phase 4: Sharing & Services
+*NAS functionality. Idempotent configuration.*
+
+### 4.1 SMB (Kernel)
+- [ ] **Config:** Manage `smbadm` and `sharesmb` property.
+- [ ] **ACLs:** UI for ZFS/SMB ACL management.
+- [ ] **Idempotency:** Ensure applying settings doesn't break existing connections if config hasn't changed.
+
+### 4.2 NFS
+- [ ] **Config:** Manage `sharenfs` property or `/etc/exports`.
+- [ ] **Access:** IP-based Host Allow/Deny.
+
+### 4.3 Users & Groups
+- [ ] **Local Users:** Wrapper for `useradd`/`passwd` (Shadow DB for share access).
+- [ ] **Groups:** Group management.
+
+### 4.4 Service Control
+- [ ] **SMF Interface:** Wrapper for `svcs` (status) and `svcadm` (restart/enable).
+
+---
+
+## Phase 5: Data Safety (Enterprise)
+*Backups and Replication.*
+
+### 5.1 Snapshots
+- [ ] **UI:** List, Rollback, Delete, Clone.
+- [ ] **Time Slider:** Visual component for snapshot browsing.
+
+### 5.2 Replication
+- [ ] **Transport:** SSH Key management.
+- [ ] **Engine:** Wrapper for `zfs send | ssh recv`.
+- [ ] **Scheduler:** Cron job generator.
+
+### 5.3 Cloud Backup (Restic)
+- [ ] **Integration:** Download/Install `restic`.
+- [ ] **UI:** Repo Init (S3/SFTP), Backup, Restore browser.
+
+---
+
+## Phase 6: Productization
+*Distribution and Polish.*
+
+### 6.1 Custom ISO / Installer
+- [ ] **Build Script:** Remaster OmniOS ISO.
+- [ ] **Injection:** Embed binary and SMF manifest (`/opt/storage-os`).
+- [ ] **Boot Script:** First-boot logic (Certificate generation, Initial Network Setup).
+
+### 6.2 Final Polish
+- [ ] **Security Audit:** Verify permissions, port exposure, and Cookie attributes.
+- [ ] **UX Polish:** Dark Mode, Mobile Responsiveness, Loading States.
+- [ ] **Documentation:** README, API Docs, User Guide.
+- [ ] **HA Readiness:** Keep API stateless and reconciliation idempotent to allow future active/passive clustering on shared storage.
