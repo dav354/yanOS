@@ -4,13 +4,13 @@
 *Establish the technical backbone with security and observability from day one.*
 
 ### 1.1 Project Setup & Tooling
-- [ ] **Init Rust Workspace:** Run `cargo new` with the structure: `core` (Types), `api` (Web Server), `adapters` (OS Interaction).
-- [ ] **Build System:** Create a `justfile` for commands like `just run` or `just build-ui`.
-- [ ] **Logging & Tracing:**
-  - [ ] Configure `tracing` and `tracing-subscriber`.
-  - [ ] Configure **OpenTelemetry (OTel)** layer.
-  - [ ] Enable structured JSON logging.
-- [ ] **Observability Endpoints:** Implement `/healthz` and `/readyz` for uptime/status checks.
+- [x] **Init Rust Workspace:** Run `cargo new` with the structure: `core` (Types), `api` (Web Server), `adapters` (OS Interaction).
+- [x] **Build System:** Create a `justfile` for commands like `just run` or `just build-ui`.
+- [x] **Logging & Tracing:**
+  - [x] Configure `tracing` and `tracing-subscriber`.
+  - [x] Configure **OpenTelemetry (OTel)** layer.
+  - [x] Enable structured JSON logging.
+- [x] **Observability Endpoints:** Implement `/healthz` and `/readyz` for uptime/status checks.
 
 ### 1.2 Secure Web Server & API Spec
 - [ ] **TLS Bootstrap:** Integrate `rcgen` crate. On startup, check for `cert.pem`; if missing, generate a self-signed certificate.
@@ -59,6 +59,8 @@
 - [ ] **Live Metrics:** Push CPU/RAM usage via WSS (start with `kstat` CLI parsing; plan `libkstat` FFI later for performance).
 - [ ] **UI:** Svelte 5 Runes-based dashboard components.
 - [ ] **Metrics Endpoint:** Expose `/metrics` in Prometheus format alongside tracing/OTel exporters.
+- [ ] **Internationalization:** Define message catalogs (default en-US), add locale switcher, and wire locale negotiation/fallback early in the UI/API.
+- [ ] **Themes:** Establish multiple UI themes (e.g., light/high-contrast/dark) with a toggle and persisted preference.
 
 ### 2.4 Lifecycle & Safe Updates
 - [ ] **Boot Environments (BE):** Wrapper for `beadm list`, `beadm create`, `beadm activate`.
@@ -126,7 +128,7 @@
 
 ---
 
-## Phase 5: Data Safety (Enterprise)
+## Phase 5: Data Safety
 *Backups and Replication.*
 
 ### 5.1 Snapshots
@@ -156,4 +158,5 @@
 - [ ] **Security Audit:** Verify permissions, port exposure, and Cookie attributes.
 - [ ] **UX Polish:** Dark Mode, Mobile Responsiveness, Loading States.
 - [ ] **Documentation:** README, API Docs, User Guide.
+- [ ] **Internationalization:** Add i18n message catalogs (default en-US), language switcher in the UI, and locale negotiation/fallback in the API responses.
 - [ ] **HA Readiness:** Keep API stateless and reconciliation idempotent to allow future active/passive clustering on shared storage.
