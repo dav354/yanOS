@@ -8,3 +8,17 @@ pub struct SystemInfo {
     pub kernel_version: String,
     pub uptime: u64,
 }
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub state: String,
+    pub address: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PackageInfo {
+    pub name: String,
+    pub version: String,
+    pub status: String,
+}

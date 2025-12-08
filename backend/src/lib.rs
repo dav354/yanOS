@@ -1,6 +1,9 @@
+pub mod actors;
 pub mod adapters;
 pub mod api;
 pub mod auth;
 pub mod core;
 pub mod error;
+pub mod events;
 pub mod tls;
+pub mod watchers;

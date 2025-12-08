@@ -13,7 +13,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use zos_backend::api::{self, AppState};
 use zos_backend::auth;
 use zos_backend::error::AppError;
-use zos_backend::tls;
+use zos_backend::{actors, events::EventBus, tls, watchers};
 
 /// Initializes the tracing system with OpenTelemetry.
 fn init_tracing() -> Result<(), AppError> {
@@ -64,10 +64,27 @@ async fn main() -> Result<(), AppError> {
         .map_err(AppError::from)?;
     tls_state.spawn_reload_task();
 
+    let event_bus = EventBus::new(128);
+
+    // Keep watchers and actors alive for the process lifetime.
+    let _config_watcher = watchers::start_filesystem_watcher(Path::new("/etc"), event_bus.sender())
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to start watcher: {e}")))?;
+
+    let network_actor = actors::start_network_actor();
+    let pkg_actor = actors::start_pkg_actor();
+
     let session_store = auth::memory_store();
     let session_layer = auth::create_session_layer(session_store.clone());
     let csrf_config = auth::create_csrf_config();
-    let app_state = AppState::new(csrf_config.clone(), session_store, tls_state.clone());
+    let app_state = AppState::new(
+        csrf_config.clone(),
+        session_store,
+        tls_state.clone(),
+        event_bus.clone(),
+        network_actor.clone(),
+        pkg_actor.clone(),
+    );
 
     let app = api::create_router(app_state.clone());
 
@@ -87,7 +104,7 @@ async fn main() -> Result<(), AppError> {
     info!(target: "zos::main", "Swagger UI available at https://{}/swagger-ui", https_addr);
 
     axum_server::bind_rustls(https_addr, tls_state.config())
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .serve(app.into_make_service())
         .await
         .map_err(AppError::from)?;
 
