@@ -1,6 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="vmTest" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="buildProfileId" value="dev" />
+    <target name="omnios1" />
     <option name="command" value="run" />
     <option name="workingDirectory" value="file://backend" />
     <envs>

@@ -2,13 +2,13 @@ use std::{net::SocketAddr, path::Path};
 
 use axum::response::Redirect;
 use axum_csrf::CsrfLayer;
-use opentelemetry::{global, trace::TracerProvider, KeyValue};
+use opentelemetry::{KeyValue, global, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
-use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
+use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
 use tokio::net::TcpListener;
 use tower_cookies::CookieManagerLayer;
 use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
 use zos_backend::api::{self, AppState};
 use zos_backend::auth;

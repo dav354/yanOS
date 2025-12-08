@@ -2,14 +2,14 @@
 
 use std::{fs, path::Path, sync::Arc};
 
-use axum::{extract::Request, middleware::Next, response::Response, routing::post, Json, Router};
+use axum::{Json, Router, extract::Request, middleware::Next, response::Response, routing::post};
 use axum_csrf::CsrfConfig;
-use rand::{thread_rng, RngCore};
+use rand::{RngCore, thread_rng};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 use tower_sessions::{
-    cookie::Key, service::PrivateCookie, Expiry, MemoryStore, Session, SessionManagerLayer,
-    SessionStore,
+    Expiry, MemoryStore, Session, SessionManagerLayer, SessionStore, cookie::Key,
+    service::PrivateCookie,
 };
 use tracing::{error, info, instrument};
 use utoipa::ToSchema;
@@ -174,13 +174,17 @@ where
     router.route("/api/login", post(login_handler))
 }
 
-use std::ffi::{CString};
+use std::ffi::CString;
 use std::ptr;
 
 use pam_sys::{
-    pam_authenticate, pam_end, pam_handle_t, pam_message, pam_response, pam_start,
-    PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PAM_SUCCESS,
+    PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PAM_SUCCESS, pam_authenticate, pam_end, pam_handle_t,
+    pam_message, pam_response, pam_start,
 };
+
+const PAM_SUCCESS_I32: i32 = PAM_SUCCESS as i32;
+const PAM_CONV_ERR_I32: i32 = PAM_CONV_ERR as i32;
+const PAM_PROMPT_ECHO_OFF_I32: i32 = PAM_PROMPT_ECHO_OFF as i32;
 
 // ... existing imports ...
 
@@ -197,30 +201,32 @@ unsafe extern "C" fn pam_conversation(
     appdata_ptr: *mut std::ffi::c_void,
 ) -> i32 {
     if num_msg <= 0 || num_msg > 32 {
-        return PAM_CONV_ERR;
+        return PAM_CONV_ERR_I32;
     }
 
     unsafe {
         let credentials = &*(appdata_ptr as *const PamCredentials);
-        let messages = std::slice::from_raw_parts(msg as *const *const pam_message, num_msg as usize);
-        
+        let messages =
+            std::slice::from_raw_parts(msg as *const *const pam_message, num_msg as usize);
+
         // Allocate memory for responses using libc::calloc to be compatible with PAM's expectation
         // that it can free it with free().
-        let resp_ptr = libc::calloc(num_msg as usize, std::mem::size_of::<pam_response>()) as *mut pam_response;
+        let resp_ptr = libc::calloc(num_msg as usize, std::mem::size_of::<pam_response>())
+            as *mut pam_response;
         if resp_ptr.is_null() {
-            return PAM_CONV_ERR;
+            return PAM_CONV_ERR_I32;
         }
-        
+
         let responses = std::slice::from_raw_parts_mut(resp_ptr, num_msg as usize);
 
         for (i, msg_ptr) in messages.iter().enumerate() {
             let msg = &**msg_ptr;
-            if msg.msg_style == PAM_PROMPT_ECHO_OFF {
+            if msg.msg_style == PAM_PROMPT_ECHO_OFF_I32 {
                 // Password prompt
                 let pass_ptr = libc::strdup(credentials.password.as_ptr());
                 if pass_ptr.is_null() {
                     libc::free(resp_ptr as *mut _);
-                    return PAM_CONV_ERR;
+                    return PAM_CONV_ERR_I32;
                 }
                 responses[i].resp = pass_ptr;
                 responses[i].resp_retcode = 0;
@@ -232,7 +238,7 @@ unsafe extern "C" fn pam_conversation(
         }
 
         *resp = resp_ptr;
-        PAM_SUCCESS
+        PAM_SUCCESS_I32
     }
 }
 
@@ -261,39 +267,42 @@ pub async fn login_handler(
     let result = tokio::task::spawn_blocking(move || {
         let c_user = CString::new(username).map_err(|_| "Invalid username")?;
         let c_pass = CString::new(password).map_err(|_| "Invalid password")?;
-        
+
         let credentials = PamCredentials { password: c_pass };
-        
+
         let conv = pam_sys::pam_conv {
-            conv: Some(pam_conversation as unsafe extern "C" fn(
-                i32,
-                *mut *const pam_message, // Reflect corrected type
-                *mut *mut pam_response,
-                *mut std::ffi::c_void,
-            ) -> i32),
+            conv: Some(
+                pam_conversation
+                    as unsafe extern "C" fn(
+                        i32,
+                        *mut *const pam_message, // Reflect corrected type
+                        *mut *mut pam_response,
+                        *mut std::ffi::c_void,
+                    ) -> i32,
+            ),
 
             appdata_ptr: &credentials as *const _ as *mut _,
         };
 
         let mut pam_h: *mut pam_handle_t = ptr::null_mut();
-        
+
         unsafe {
             // 1. Start PAM transaction
             let retval = pam_start(
                 c"login".as_ptr(), // Service name
-                c_user.as_ptr(), 
-                &conv, 
-                &mut pam_h
+                c_user.as_ptr(),
+                &conv,
+                &mut pam_h,
             );
 
-            if retval != PAM_SUCCESS {
+            if retval != PAM_SUCCESS_I32 {
                 return Err("Failed to start PAM transaction".to_string());
             }
 
             // 2. Authenticate
             let retval = pam_authenticate(pam_h, 0);
-            
-            if retval != PAM_SUCCESS {
+
+            if retval != PAM_SUCCESS_I32 {
                 let _ = pam_end(pam_h, retval);
                 return Err("Authentication failed".to_string());
             }
@@ -303,7 +312,7 @@ pub async fn login_handler(
             // if retval != PAM_SUCCESS { ... }
 
             // 4. End PAM transaction
-            pam_end(pam_h, PAM_SUCCESS);
+            pam_end(pam_h, PAM_SUCCESS_I32);
             Ok(())
         }
     })

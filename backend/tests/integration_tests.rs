@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use axum::{
+    Router,
     body::Body,
     http::{Request, StatusCode},
-    Router,
 };
 use http_body_util::BodyExt; // for `collect` and `to_bytes`
 use hyper::Method;
+use tempfile::{TempDir, tempdir};
 use tower::ServiceExt; // for `call`, `ready`
-use tempfile::{tempdir, TempDir};
 use tower_sessions::SessionStore;
 use tower_sessions_core::session::{Id, Record};
 use tower_sessions_core::session_store;
@@ -20,11 +20,14 @@ async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
     let temp_dir_session = tempdir().expect("Failed to create temporary directory for session key");
     let session_key_path = temp_dir_session.path().join("session.key");
 
-    let (session_layer, session_store_for_readyz_check) = auth::create_session_manager_layer_for_test(&session_key_path);
+    let (session_layer, session_store_for_readyz_check) =
+        auth::create_session_manager_layer_for_test(&session_key_path);
 
     let temp_dir_tls = tempdir().expect("Failed to create temporary directory for TLS");
     let cert_dir = temp_dir_tls.path();
-    let tls_state = tls::TlsState::load(cert_dir).await.expect("Failed to load TLS state");
+    let tls_state = tls::TlsState::load(cert_dir)
+        .await
+        .expect("Failed to load TLS state");
 
     let csrf_config = auth::create_csrf_config();
 
@@ -169,10 +172,12 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
     let response = app_with_failing_session.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let json_body: Value = get_body_as_json(response).await;
-    assert!(json_body["error"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("Session store create failed"));
+    assert!(
+        json_body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Session store create failed")
+    );
 }
 
 #[tokio::test]
@@ -290,7 +295,8 @@ async fn test_session_key_is_regenerated_when_too_short() {
     std::fs::write(&session_key_path, &[1u8]).expect("Failed to write short key");
 
     // Building the layer will regenerate the key.
-    let (_session_layer, _session_store) = auth::create_session_manager_layer_for_test(&session_key_path);
+    let (_session_layer, _session_store) =
+        auth::create_session_manager_layer_for_test(&session_key_path);
 
     let regenerated = std::fs::read(&session_key_path).expect("Failed to read regenerated key");
     assert!(

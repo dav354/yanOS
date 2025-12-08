@@ -1,16 +1,16 @@
 // backend/src/api.rs
 
 use axum::{
+    Json, Router,
     extract::{
-        ws::{Message, WebSocket},
         FromRef, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     middleware,
     routing::get,
-    Json, Router,
 };
-use axum_csrf::{CsrfConfig};
-use serde_json::{json, Value};
+use axum_csrf::CsrfConfig;
+use serde_json::{Value, json};
 use tower_sessions::Session;
 use tracing::{info, instrument};
 use utoipa::OpenApi;
