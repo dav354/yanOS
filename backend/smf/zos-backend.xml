@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1">
+<service_bundle type="manifest" name="site/storage-os">
+  <service name="site/storage-os" type="service" version="1">
+    <create_default_instance enabled="false"/>
+    <single_instance/>
+
+    <dependency name="fs-local" grouping="require_all" restart_on="none" type="service">
+      <service_fmri value="svc:/system/filesystem/local"/>
+    </dependency>
+    <dependency name="net" grouping="require_all" restart_on="none" type="service">
+      <service_fmri value="svc:/milestone/network"/>
+    </dependency>
+
+    <exec_method type="method" name="start" exec="/opt/storage-os/bin/zos-backend" timeout_seconds="60">
+      <method_context>
+        <method_credential user="webservd" group="webservd" privileges="basic,file_chown_self,net_privaddr"/>
+        <method_environment>
+          <envvar name="RUST_LOG" value="info"/>
+          <envvar name="TLS_DIR" value="/etc/opt/storage-os/tls"/>
+        </method_environment>
+      </method_context>
+    </exec_method>
+
+    <exec_method type="method" name="stop" exec=":kill" timeout_seconds="60"/>
+
+    <stability value="Evolving"/>
+    <template>
+      <common_name>
+        <loctext xml:lang="C">zOS Backend Service</loctext>
+      </common_name>
+      <documentation>
+        <manpage title="zos-backend" section="1M" manpath="/opt/storage-os/share/man"/>
+      </documentation>
+    </template>
+  </service>
+</service_bundle>

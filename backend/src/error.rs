@@ -17,6 +17,8 @@ pub enum AppError {
     IoError(std::io::Error),
     /// Used when authentication fails.
     Unauthorized(String),
+    /// Used when the service is not ready.
+    ServiceUnavailable(String),
 }
 
 impl IntoResponse for AppError {
@@ -36,6 +38,10 @@ impl IntoResponse for AppError {
             AppError::Unauthorized(msg) => {
                 error!("Unauthorized: {}", msg);
                 (StatusCode::UNAUTHORIZED, msg)
+            }
+            AppError::ServiceUnavailable(msg) => {
+                error!("Service Unavailable: {}", msg);
+                (StatusCode::SERVICE_UNAVAILABLE, msg)
             }
         };
 

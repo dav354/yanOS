@@ -1,13 +1,20 @@
 // backend/src/api.rs
 
-use axum::{routing::get, Json, Router};
+use axum::{
+    extract::{FromRef, State},
+    routing::get,
+    Json, Router,
+};
 use axum_csrf::{CsrfConfig, CsrfToken};
 use serde_json::{json, Value};
+use tower_sessions::Session;
 use tracing::{info, instrument};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::auth;
+use crate::auth::{self, DynSessionStore};
+use crate::error::AppError;
+use crate::tls;
 
 /// The main struct for generating OpenAPI documentation.
 #[derive(OpenApi)]
@@ -32,16 +39,44 @@ use crate::auth;
 )]
 pub struct ApiDoc;
 
-/// Creates the main API router, including the Swagger UI.
-pub fn create_router(csrf_config: CsrfConfig) -> Router {
-    let api_routes: Router<CsrfConfig> = Router::new().route("/status", get(api_status));
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub csrf_config: CsrfConfig,
+    pub session_store: DynSessionStore,
+    pub tls_state: tls::TlsState,
+}
 
-    Router::new()
+impl AppState {
+    pub fn new(
+        csrf_config: CsrfConfig,
+        session_store: DynSessionStore,
+        tls_state: tls::TlsState,
+    ) -> Self {
+        Self {
+            csrf_config,
+            session_store,
+            tls_state,
+        }
+    }
+}
+
+impl FromRef<AppState> for CsrfConfig {
+    fn from_ref(input: &AppState) -> CsrfConfig {
+        input.csrf_config.clone()
+    }
+}
+
+/// Creates the main API router, including the Swagger UI.
+pub fn create_router(app_state: AppState) -> Router {
+    let api_routes = Router::new().route("/status", get(api_status));
+
+    let app = Router::new()
         .route("/healthz", get(healthz_handler))
         .route("/readyz", get(readyz_handler))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .nest("/api/v1", api_routes)
-        .with_state(csrf_config)
+        .nest("/api/v1", api_routes);
+
+    app.with_state(app_state)
 }
 
 /// Liveness probe endpoint.
@@ -62,19 +97,21 @@ async fn healthz_handler() -> Json<Value> {
     get,
     path = "/readyz",
     responses(
-        (status = 200, description = "Service is ready to accept traffic")
+        (status = 200, description = "Service is ready to accept traffic"),
+        (status = 503, description = "Service is not ready")
     )
 )]
 #[instrument]
-async fn readyz_handler() -> Json<Value> {
-    let cert_path = std::path::Path::new("/etc/opt/storage-os/tls/cert.pem");
-    let key_path = std::path::Path::new("/etc/opt/storage-os/tls/key.pem");
-
-    if cert_path.exists() && key_path.exists() {
-        Json(json!({ "status": "ready" }))
-    } else {
-        Json(json!({ "status": "not_ready", "error": "TLS certificates missing" }))
+async fn readyz_handler(State(app_state): State<AppState>) -> Result<Json<Value>, AppError> {
+    if !app_state.tls_state.is_ready() {
+        return Err(AppError::ServiceUnavailable(
+            "TLS configuration not ready".to_string(),
+        ));
     }
+
+    auth::session_store_healthcheck(&app_state.session_store).await?;
+
+    Ok(Json(json!({ "status": "ready" })))
 }
 
 /// Get the current status of the API.
@@ -86,10 +123,12 @@ async fn readyz_handler() -> Json<Value> {
     )
 )]
 #[instrument(skip(token))]
-async fn api_status(token: CsrfToken) -> Json<Value> {
+async fn api_status(token: CsrfToken, session: Session) -> Json<Value> {
     info!("Responding to API status check");
+    let username: Option<String> = session.get("username").await.unwrap_or(None);
     Json(json!({
         "status": "ok",
-        "csrf_token": token.authenticity_token().unwrap_or_default()
+        "csrf_token": token.authenticity_token().unwrap_or_default(),
+        "user": username
     }))
 }

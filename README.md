@@ -21,3 +21,8 @@ We are building a **Storage Appliance**, not just a "tool". The user downloads a
 *   **Frontend:** Svelte 5 (Runes) + Tailwind CSS.
     *   **Web Shell:** Integration of `ttyd` via WebSocket proxy directly in the dashboard.
 *   **Build System:** `just` (as a modern Make replacement).
+
+## 3. Service Management
+
+*   **Service User:** `webservd` (least privilege for the Axum binary).
+*   **SMF Manifest:** `backend/smf/zos-backend.xml` imports the service under `site/storage-os`.

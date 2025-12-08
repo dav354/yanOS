@@ -17,6 +17,7 @@ class AuthStore {
             if (res.ok) {
                 const data = await res.json();
                 this.csrfToken = data.csrf_token;
+                this.user = data.user ?? null;
             }
         } catch (e) {
             console.error('Failed to init auth', e);
@@ -38,9 +39,11 @@ class AuthStore {
         });
 
         if (res.ok) {
+            await this.init();
             this.user = username;
             return true;
         } else {
+            this.user = null;
             console.error('Login failed');
             return false;
         }
