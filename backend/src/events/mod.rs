@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 use std::path::PathBuf;
+use tokio::sync::broadcast;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExternalEvent {
     // Config Changes
     ConfigChanged { path: PathBuf },
-    
+
     // Service Events
     ServiceStarted { fmri: String },
     ServiceStopped { fmri: String },

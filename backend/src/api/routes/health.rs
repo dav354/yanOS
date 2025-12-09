@@ -1,8 +1,8 @@
+use axum::Router;
+use axum::routing::get;
 use axum::{Json, extract::State};
 use serde_json::json;
 use tracing::instrument;
-use axum::Router;
-use axum::routing::get;
 
 use crate::api::state::AppState;
 use crate::auth;

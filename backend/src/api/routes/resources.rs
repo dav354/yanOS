@@ -1,4 +1,8 @@
-use axum::{Json, Router, extract::State, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::instrument;
@@ -37,8 +41,9 @@ pub fn routes() -> Router<AppState> {
 #[instrument(skip(state))]
 pub async fn list_network(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let interfaces = state.network_actor.list_interfaces().await?;
-    let value = serde_json::to_value(&interfaces)
-        .map_err(|e| AppError::InternalServerError(format!("Failed to serialize interfaces: {e}")))?;
+    let value = serde_json::to_value(&interfaces).map_err(|e| {
+        AppError::InternalServerError(format!("Failed to serialize interfaces: {e}"))
+    })?;
     Ok(Json(value))
 }
 
@@ -54,8 +59,9 @@ pub async fn list_network(State(state): State<AppState>) -> Result<Json<Value>, 
 #[instrument(skip(state))]
 pub async fn list_packages(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let pkgs = state.pkg_actor.list().await?;
-    let value = serde_json::to_value(&pkgs)
-        .map_err(|e| AppError::InternalServerError(format!("Failed to serialize package list: {e}")))?;
+    let value = serde_json::to_value(&pkgs).map_err(|e| {
+        AppError::InternalServerError(format!("Failed to serialize package list: {e}"))
+    })?;
     Ok(Json(value))
 }
 
@@ -72,7 +78,7 @@ pub async fn list_packages(State(state): State<AppState>) -> Result<Json<Value>,
 #[instrument(skip(_state))]
 pub async fn create_dataset(
     State(_state): State<AppState>,
-    Json(_payload): Json<CreateDatasetRequest>
+    Json(_payload): Json<CreateDatasetRequest>,
 ) -> Result<Json<CreateDatasetResponse>, AppError> {
     // Stub
     Ok(Json(CreateDatasetResponse { success: true }))

@@ -8,7 +8,7 @@ pub mod routes;
 pub mod state;
 
 // Re-export AppState
-pub use state::AppState; 
+pub use state::AppState;
 
 #[derive(OpenApi)]
 #[openapi(
