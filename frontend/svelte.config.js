@@ -11,7 +11,10 @@ const config = {
     adapter: adapter({
       fallback: 'index.html',
       strict: false
-    })
+    }),
+    prerender: {
+      handleHttpError: 'warn'
+    }
   }
 };
 
