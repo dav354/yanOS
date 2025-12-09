@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="RunAll" type="CompoundRunConfigurationType">
+    <toRun name="RunFrontend" type="ChromiumRemoteDebugType" />
+    <toRun name="vmTestBackend" targetId="RsBuildProfile:dev" type="CargoCommandRunConfiguration" />
+    <method v="2" />
+  </configuration>
+</component>

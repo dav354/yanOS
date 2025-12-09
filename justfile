@@ -20,6 +20,11 @@ run-backend:
 run-frontend:
     cd frontend && npm install && npm run dev
 
+# Deploy and run frontend on VM
+dev-frontend-remote:
+    rsync -avz --exclude 'node_modules' --exclude '.svelte-kit' --exclude '.git' frontend/ root@192.168.122.143:~/zos-frontend/
+    ssh root@192.168.122.143 "cd ~/zos-frontend && npm install && npm run dev -- --host 0.0.0.0"
+
 # Clean all build artifacts
 clean:
     cd backend && cargo clean

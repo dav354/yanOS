@@ -29,6 +29,7 @@
 
           # Project runner
           pkgs.just
+          pkgs.rsync
 
           # System libraries for backend crates
           pkgs.linux-pam # For the `pam` crate

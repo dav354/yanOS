@@ -1,13 +1,11 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="vmTest" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="vmTestBackend" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="buildProfileId" value="dev" />
     <target name="omnios1" />
     <option name="command" value="run" />
     <option name="workingDirectory" value="file://backend" />
     <envs>
       <env name="LD_LIBRARY_PATH" value="/opt/ooce/llvm-21/lib:$LD_LIBRARY_PATH" />
-      <env name="CARGO_NET_OFFLINE" value="true" />
-      <env name="CARGO_LOCKED" value="1" />
     </envs>
     <option name="emulateTerminal" value="true" />
     <option name="channel" value="DEFAULT" />
