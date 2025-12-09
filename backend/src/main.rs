@@ -1,12 +1,13 @@
 use std::{net::SocketAddr, path::Path};
 
-use axum::response::Redirect;
+use axum::{response::Redirect, routing::get_service};
 use axum_csrf::CsrfLayer;
 use opentelemetry::{KeyValue, global, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
 use tokio::net::TcpListener;
 use tower_cookies::CookieManagerLayer;
+use tower_http::services::{ServeDir, ServeFile};
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -88,13 +89,23 @@ async fn main() -> Result<(), AppError> {
         metrics_state, // Pass metrics state
     );
 
-    let app = api::create_router();
+    let api_app = api::create_router();
 
-    let app = auth::add_auth_routes(app)
+    let api_app = auth::add_auth_routes(api_app)
         .layer(CsrfLayer::new(csrf_config))
         .layer(session_layer)
         .layer(CookieManagerLayer::new())
-        .with_state(app_state);
+        .with_state(app_state.clone());
+
+    let static_dir = std::env::var("ZOS_UI_DIR").unwrap_or_else(|_| "/opt/zos/ui".to_string());
+    let index_file = Path::new(&static_dir).join("index.html");
+    let static_service = get_service(
+        ServeDir::new(static_dir.clone()).not_found_service(ServeFile::new(index_file)),
+    );
+
+    let app = axum::Router::new()
+        .merge(api_app)
+        .fallback_service(static_service);
 
     let https_addr = SocketAddr::from(([0, 0, 0, 0], 8443));
     tokio::spawn(async {
