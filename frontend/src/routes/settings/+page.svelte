@@ -64,34 +64,38 @@
         </div>
 
         <div class="flex flex-col gap-4">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div class="text-text-main font-semibold" title={i18n.t('settings.languageLabel')}>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div class="text-text-main font-semibold sm:w-1/3" title={i18n.t('settings.languageLabel')}>
                     {i18n.t('settings.languageLabel')}
                 </div>
-                <select
-                    class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 w-full sm:w-64"
-                    bind:value={pendingLang}
-                    title={i18n.t('settings.languageLabel')}
-                >
-                    {#each availableLangs as l}
-                        <option value={l.id}>{l.name}</option>
-                    {/each}
-                </select>
+                <div class="sm:w-2/3 flex sm:justify-start">
+                    <select
+                        class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 w-full sm:w-64"
+                        bind:value={pendingLang}
+                        title={i18n.t('settings.languageLabel')}
+                    >
+                        {#each availableLangs as l}
+                            <option value={l.id}>{l.name}</option>
+                        {/each}
+                    </select>
+                </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div class="text-text-main font-semibold" title={i18n.t('settings.themeLabel')}>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div class="text-text-main font-semibold sm:w-1/3" title={i18n.t('settings.themeLabel')}>
                     {i18n.t('settings.themeLabel')}
                 </div>
-                <select
-                    class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 w-full sm:w-64"
-                    bind:value={pendingTheme}
-                    title={i18n.t('settings.themeLabel')}
-                >
-                    {#each availableThemes as t}
-                        <option value={t.id}>{t.name}</option>
-                    {/each}
-                </select>
+                <div class="sm:w-2/3 flex sm:justify-start">
+                    <select
+                        class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 w-full sm:w-64"
+                        bind:value={pendingTheme}
+                        title={i18n.t('settings.themeLabel')}
+                    >
+                        {#each availableThemes as t}
+                            <option value={t.id}>{t.name}</option>
+                        {/each}
+                    </select>
+                </div>
             </div>
         </div>
         <div class="flex justify-end">
