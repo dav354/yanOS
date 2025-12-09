@@ -11,6 +11,7 @@ const translations = {
             settings: 'Settings',
             logout: 'Logout',
             confirmLogout: 'Do you really want to log out?',
+            cancel: 'Cancel',
         },
         sidebar: {
             systemOnline: 'System: Online',
@@ -44,6 +45,7 @@ const translations = {
             integrations: 'Integrations',
             about: 'About',
             placeholder: 'Coming soon.',
+            confirmLeave: 'You have unsaved changes. Save before leaving?',
         },
         network: {
             title: 'Network Interfaces',
@@ -74,6 +76,7 @@ const translations = {
             settings: 'Einstellungen',
             logout: 'Abmelden',
             confirmLogout: 'Möchtest du dich wirklich abmelden?',
+            cancel: 'Abbrechen',
         },
         sidebar: {
             systemOnline: 'System: Online',
@@ -107,6 +110,7 @@ const translations = {
             integrations: 'Integrationen',
             about: 'Über',
             placeholder: 'In Kürze verfügbar.',
+            confirmLeave: 'Du hast ungespeicherte Änderungen. Vor dem Verlassen speichern?',
         },
         network: {
             title: 'Netzwerk-Interfaces',
