@@ -1,8 +1,10 @@
-# Default task
-default: all
+# Config
+vmConnection := "root@192.168.122.143"
+remoteDir := "/opt/zos"
 
-# Build everything
-all: build-backend build-frontend
+# Derived paths (Must be defined at top level for 'just')
+backendDir := remoteDir + "/backend"
+frontendDir := remoteDir + "/ui"
 
 # Build the Rust backend
 build-backend:
@@ -10,23 +12,25 @@ build-backend:
 
 # Build the Svelte frontend
 build-frontend:
-    cd frontend && npm install && npm run build
+    cd frontend && npm ci && npm run build
 
-# Run the backend
-run-backend:
-    cd backend && cargo run
+# Deploy the backend on VM
+deploy-backend:
+    ssh {{ vmConnection }} "mkdir -p {{ backendDir }}"
+    rsync -avz --delete --exclude 'target' backend/ {{ vmConnection }}:{{ backendDir }}
+    ssh -t {{ vmConnection }} "cd {{ backendDir }} && LD_LIBRARY_PATH=/opt/ooce/llvm-21/lib:\$LD_LIBRARY_PATH /opt/ooce/bin/cargo run --color=always --profile dev"
 
-# Run the frontend dev server
-run-frontend:
-    cd frontend && npm install && npm run dev
+# Deploy frontend on VM
+deploy-frontend: build-frontend
+    ssh {{ vmConnection }} "mkdir -p {{ frontendDir }}"
+    rsync -avz --delete frontend/build/ {{ vmConnection }}:{{ frontendDir }}
 
-# Deploy and run frontend on VM
-dev-frontend-remote:
-    rsync -avz --exclude 'node_modules' --exclude '.svelte-kit' --exclude '.git' frontend/ root@192.168.122.143:~/zos-frontend/
-    ssh root@192.168.122.143 "cd ~/zos-frontend && npm install && npm run dev -- --host 0.0.0.0"
+# Full Deploy
+deploy: deploy-frontend deploy-backend
 
 # Clean all build artifacts
 clean:
     cd backend && cargo clean
     rm -rf frontend/node_modules
     rm -rf frontend/.svelte-kit
+    rm -rf frontend/build
