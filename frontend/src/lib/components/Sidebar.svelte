@@ -18,20 +18,34 @@
         { key: 'nav.settings', href: '/settings' }
     ];
 
+    const settingsSections = [
+        { id: 'ui', key: 'settings.uiSection' },
+        { id: 'notifications', key: 'settings.notifications' },
+        { id: 'integrations', key: 'settings.integrations' },
+        { id: 'about', key: 'settings.about' },
+    ];
+
+    let currentHash = $derived($page.url.hash || '');
+    let onSettings = $derived(($page.url.pathname || '').startsWith('/settings'));
+
     function changeLang(event) {
         const newLang = event.target.value;
         i18n.setLang(newLang);
         lang = newLang;
     }
 
-    function confirmLogout(event) {
+    let showLogoutConfirm = $state(false);
+
+    function requestLogout(event) {
         event.preventDefault();
-        if (confirm(i18n.t('nav.confirmLogout'))) {
-            // simple client-side logout: clear session cookie via redirect
-            fetch('/api/v1/logout', { method: 'POST', credentials: 'include' }).finally(() => {
-                window.location.href = '/login';
-            });
-        }
+        showLogoutConfirm = true;
+    }
+
+    function doLogout() {
+        showLogoutConfirm = false;
+        fetch('/api/v1/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+            window.location.href = '/login';
+        });
     }
 </script>
 
@@ -51,20 +65,38 @@
                     >
                         {i18n.t(link.key)}
                     </a>
+                    {#if onSettings && link.href === '/settings'}
+                        <ul class="mt-1 space-y-1 pl-4 border-l border-border-main/50">
+                            {#each settingsSections as section}
+                                <li>
+                                    <a
+                                        href={`/settings#${section.id}`}
+                                        class={"flex items-center px-3 py-1.5 text-xs transition-colors duration-150 rounded "
+                                            + (currentHash === `#${section.id}`
+                                                ? 'bg-primary text-primary-fg'
+                                                : 'text-text-sidebar-muted hover:bg-white/5 hover:text-text-sidebar')}
+                                    >
+                                        {i18n.t(section.key)}
+                                    </a>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
                 </li>
             {/each}
         </ul>
-        <div class="mt-4 px-4">
-            <button
-                onclick={confirmLogout}
-                class="w-full text-left px-4 py-2 text-sm font-medium rounded border border-border-main text-red-400 hover:bg-red-500/10 hover:text-red-200 transition-colors"
-            >
-                {i18n.t('nav.logout')}
-            </button>
-        </div>
     </nav>
-    
-    <div class="p-4 border-t border-border-main bg-bg-sidebar space-y-2">
+
+    <div class="p-4 bg-bg-sidebar">
+        <button
+            onclick={requestLogout}
+            class="w-full text-left px-4 py-2 text-sm font-medium rounded border border-border-main text-red-400 hover:bg-red-500/10 hover:text-red-200 transition-colors"
+        >
+            {i18n.t('nav.logout')}
+        </button>
+    </div>
+
+    <div class="p-4 border-t border-border-main bg-bg-sidebar space-y-3">
         <div class="flex items-center justify-between">
             <div class="text-xs text-text-sidebar-muted">
                 <p>{i18n.t('sidebar.systemOnline')}</p>
@@ -81,17 +113,30 @@
                 </svg>
             </a>
         </div>
-        <div class="flex items-center gap-2">
-            <label class="text-xs text-text-sidebar-muted">{i18n.t('sidebar.language')}</label>
-            <select
-                class="bg-bg-sidebar border border-border-main text-text-sidebar text-xs rounded px-2 py-1"
-                value={lang}
-                oninput={changeLang}
-            >
-                {#each availableLangs as l}
-                    <option value={l.id}>{l.name}</option>
-                {/each}
-            </select>
-        </div>
     </div>
+
+    {#if showLogoutConfirm}
+        <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div class="bg-bg-card border border-border-main rounded shadow-lg max-w-sm w-full mx-4 p-4">
+                <h3 class="text-lg font-semibold text-text-main mb-2">{i18n.t('nav.logout')}</h3>
+                <p class="text-text-muted text-sm mb-4">{i18n.t('nav.confirmLogout')}</p>
+                <div class="flex justify-end gap-2">
+                    <button
+                        class="px-3 py-2 text-sm rounded border border-border-main text-text-main hover:bg-bg-main"
+                        onclick={() => showLogoutConfirm = false}
+                        type="button"
+                    >
+                        {i18n.t('nav.cancel')}
+                    </button>
+                    <button
+                        class="px-3 py-2 text-sm rounded bg-red-500 text-white hover:bg-red-600"
+                        onclick={doLogout}
+                        type="button"
+                    >
+                        {i18n.t('nav.logout')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    {/if}
 </aside>
