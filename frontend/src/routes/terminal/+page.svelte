@@ -1,5 +1,5 @@
 <div class="h-full flex flex-col">
-    <h1 class="text-3xl font-bold text-gray-800 mb-4">Web Terminal</h1>
+    <h1 class="text-3xl font-bold text-text-main mb-4">Web Terminal</h1>
     
     <div class="flex-1 bg-black rounded-lg p-4 font-mono text-green-400 overflow-hidden relative shadow-inner">
         <div class="absolute inset-0 p-4">

@@ -1,11 +1,8 @@
 <script>
     import { i18n } from '$lib/i18n.svelte.js';
 
-    let tasks = $state([
-        { name: 'ZFS scrub (rpool)', status: 'running', detail: 'Started 10:05, 12% done', severity: 'info' },
-        { name: 'Replication to backup', status: 'scheduled', detail: 'Next run at 02:00', severity: 'warn' },
-        { name: 'Snapshot rotation', status: 'idle', detail: 'Last run 04:12', severity: 'info' },
-    ]);
+    // Placeholder for future task feed (scrubs, replication, scheduled jobs)
+    let tasks = $state([]);
 
     const badge = {
         running: 'bg-green-200 text-green-900',
