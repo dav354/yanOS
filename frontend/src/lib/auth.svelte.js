@@ -3,6 +3,7 @@ import { browser } from '$app/environment';
 class AuthStore {
     user = $state(null);
     csrfToken = $state(null);
+    isInitialized = $state(false);
     isAuthenticated = $derived(!!this.user);
 
     constructor() {
@@ -21,6 +22,8 @@ class AuthStore {
             }
         } catch (e) {
             console.error('Failed to init auth', e);
+        } finally {
+            this.isInitialized = true;
         }
     }
 

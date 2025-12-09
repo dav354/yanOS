@@ -1,3 +1,114 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* 
+   * Default Theme (Light / System-like) 
+   * Fallback if no theme is selected
+   */
+  :root {
+    --bg-main: #f3f4f6;       /* gray-100 */
+    --bg-card: #ffffff;       /* white */
+    --bg-sidebar: #1f2937;    /* gray-800 */
+    --bg-input: #ffffff;
+    
+    --text-main: #111827;     /* gray-900 */
+    --text-muted: #6b7280;    /* gray-500 */
+    --text-sidebar: #ffffff;
+    --text-sidebar-muted: #9ca3af; /* gray-400 */
+
+    --border-main: #e5e7eb;   /* gray-200 */
+    
+    --primary: #2563eb;       /* blue-600 */
+    --primary-hover: #1d4ed8; /* blue-700 */
+    --primary-fg: #ffffff;
+  }
+
+  /* 
+   * Gruvbox Dark 
+   */
+  [data-theme="gruvbox"] {
+    --bg-main: #282828;
+    --bg-card: #3c3836;
+    --bg-sidebar: #1d2021;
+    --bg-input: #504945;
+
+    --text-main: #ebdbb2;
+    --text-muted: #a89984;
+    --text-sidebar: #ebdbb2;
+    --text-sidebar-muted: #a89984;
+
+    --border-main: #504945;
+
+    --primary: #fe8019;       /* Orange */
+    --primary-hover: #d65d0e;
+    --primary-fg: #282828;
+  }
+
+  /* 
+   * Rose Pine 
+   */
+  [data-theme="rose-pine"] {
+    --bg-main: #191724;
+    --bg-card: #26233a; /* Surface */
+    --bg-sidebar: #1f1d2e; /* Overlay */
+    --bg-input: #26233a;
+
+    --text-main: #e0def4; /* Text */
+    --text-muted: #908caa; /* Subtle */
+    --text-sidebar: #e0def4;
+    --text-sidebar-muted: #6e6a86;
+
+    --border-main: #403d52; /* Highlight Low */
+
+    --primary: #eb6f92;     /* Rose */
+    --primary-hover: #c45d78;
+    --primary-fg: #191724;
+  }
+
+  /* 
+   * One Dark 
+   */
+  [data-theme="one-dark"] {
+    --bg-main: #282c34;
+    --bg-card: #21252b;
+    --bg-sidebar: #1e2227;
+    --bg-input: #3b4048;
+
+    --text-main: #abb2bf;
+    --text-muted: #5c6370;
+    --text-sidebar: #abb2bf;
+    --text-sidebar-muted: #5c6370;
+
+    --border-main: #3e4451; /* Gutter */
+
+    --primary: #61afef;     /* Blue */
+    --primary-hover: #528bff;
+    --primary-fg: #282c34;
+  }
+
+  /* 
+   * Nord 
+   */
+  [data-theme="nord"] {
+    --bg-main: #2e3440;     /* nord0 */
+    --bg-card: #3b4252;     /* nord1 */
+    --bg-sidebar: #242933;  /* Darker than nord0 */
+    --bg-input: #434c5e;    /* nord2 */
+
+    --text-main: #d8dee9;   /* nord4 */
+    --text-muted: #4c566a;  /* nord3 (comments) - actually maybe too dark, using nord3+brightness or nord9 */
+    --text-muted: #81a1c1;  /* nord9 (blueish) for muted? No, let's use nord4 with opacity or nord3 mixed */
+    --text-muted: #94a0b6;  /* Custom muted */
+
+    --text-sidebar: #eceff4; /* nord6 */
+    --text-sidebar-muted: #d8dee9;
+
+    --border-main: #4c566a; /* nord3 */
+
+    --primary: #88c0d0;     /* nord8 */
+    --primary-hover: #81a1c1; /* nord9 */
+    --primary-fg: #2e3440;
+  }
+}

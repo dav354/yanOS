@@ -1,27 +1,29 @@
 <script>
-    import { onMount } from 'svelte';
     import { auth } from '$lib/auth.svelte.js';
+    import MetricGraph from '$lib/components/MetricGraph.svelte';
 
-    let username = $state('');
-    let password = $state('');
     let systemInfo = $state(null);
-    let events = $state([]);
-    let metrics = $state(null);
-    let interfaces = $state([]);
-    let packages = $state([]);
-    let eventSocket = null;
     let metricsSocket = null;
 
-    async function handleLogin(event) {
-        event.preventDefault();
-        await auth.login(username, password);
-        await fetchSystemInfo();
-        await fetchNetwork();
-        await fetchPackages();
-        connectMetrics();
-    }
+    const maxPoints = 180; // keep ~3 minutes at 1Hz
+    let labels = $state([]);
+
+    let cpuData = $state([]);
+    let ramUsed = $state([]);
+    let ramArc = $state([]);
+    let ramFree = $state([]);
+    let netRx = $state([]);
+    let netTx = $state([]);
+
+    let latestCpu = $derived(cpuData.at(-1) ?? 0);
+    let latestRam = $derived(ramUsed.at(-1) ?? 0);
+    let latestArc = $derived(ramArc.at(-1) ?? 0);
+    let latestFree = $derived(ramFree.at(-1) ?? 0);
+    let latestNetRx = $derived(netRx.at(-1) ?? 0);
+    let latestNetTx = $derived(netTx.at(-1) ?? 0);
 
     async function fetchSystemInfo() {
+        if (!auth.isAuthenticated) return;
         try {
             const res = await fetch('/api/v1/system/info');
             if (res.ok) {
@@ -32,52 +34,61 @@
         }
     }
 
-    async function fetchNetwork() {
-        if (!auth.isAuthenticated) return;
-        try {
-            const res = await fetch('/api/v1/network/interfaces');
-            if (res.ok) {
-                interfaces = await res.json();
-            }
-        } catch (e) {
-            console.error('Failed to load interfaces', e);
+    function formatBytes(bytes) {
+        if (bytes < 0 || Number.isNaN(bytes)) return '0 B';
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatPercent(val) {
+        return `${val.toFixed(1)}%`;
+    }
+
+    function applyMetric(metric) {
+        const now = new Date(metric.ts ?? Date.now());
+        const timeLabel = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+        labels.push(timeLabel);
+        if (labels.length > maxPoints) labels.shift();
+
+        const cpuVal = Number(metric.cpu_user ?? 0) + Number(metric.cpu_system ?? 0);
+        cpuData.push(cpuVal);
+        if (cpuData.length > maxPoints) cpuData.shift();
+
+        const total = Number(metric.memory_total ?? 0);
+        const arc = Math.max(0, Number(metric.zfs_arc ?? 0));
+        const usedRaw = Math.max(0, Number(metric.memory_used ?? 0));
+        const usedWithoutArc = Math.max(0, usedRaw - arc);
+        const free = Math.max(0, total - usedRaw);
+
+        ramUsed.push(usedWithoutArc);
+        ramArc.push(arc);
+        ramFree.push(free);
+        if (ramUsed.length > maxPoints) {
+            ramUsed.shift();
+            ramArc.shift();
+            ramFree.shift();
+        }
+
+        netRx.push(Math.max(0, Number(metric.rx_bytes ?? 0)));
+        netTx.push(Math.max(0, Number(metric.tx_bytes ?? 0)));
+        if (netRx.length > maxPoints) {
+            netRx.shift();
+            netTx.shift();
         }
     }
 
-    async function fetchPackages() {
-        if (!auth.isAuthenticated) return;
-        try {
-            const res = await fetch('/api/v1/pkg/list');
-            if (res.ok) {
-                packages = await res.json();
-            }
-        } catch (e) {
-            console.error('Failed to load packages', e);
-        }
-    }
-
-    function connectEvents() {
-        if (!auth.isAuthenticated) {
-            if (eventSocket) {
-                eventSocket.close();
-                eventSocket = null;
-            }
-            return;
-        }
-        const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-        const ws = new WebSocket(`${protocol}://${location.host}/api/v1/events`);
-        eventSocket = ws;
-        ws.onmessage = (evt) => {
-            try {
-                const payload = JSON.parse(evt.data);
-                events = [{ ...payload, ts: new Date().toISOString() }, ...events].slice(0, 20);
-            } catch (e) {
-                console.error('Failed to parse event', e);
-            }
-        };
-        ws.onclose = () => {
-            eventSocket = null;
-        };
+    function triggerUpdate() {
+        labels = [...labels];
+        cpuData = [...cpuData];
+        ramUsed = [...ramUsed];
+        ramArc = [...ramArc];
+        ramFree = [...ramFree];
+        netRx = [...netRx];
+        netTx = [...netTx];
     }
 
     function connectMetrics() {
@@ -88,12 +99,33 @@
             }
             return;
         }
+        
+        if (metricsSocket && metricsSocket.readyState <= 1) return;
+
         const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
         const ws = new WebSocket(`${protocol}://${location.host}/api/v1/metrics/live`);
         metricsSocket = ws;
+        
+        let batchTimer = null;
+        
         ws.onmessage = (evt) => {
             try {
-                metrics = JSON.parse(evt.data);
+                const parsed = JSON.parse(evt.data);
+
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(applyMetric);
+                    triggerUpdate();
+                    return;
+                }
+
+                applyMetric(parsed);
+
+                if (!batchTimer) {
+                    batchTimer = setTimeout(() => {
+                        triggerUpdate();
+                        batchTimer = null;
+                    }, 60);
+                }
             } catch (e) {
                 console.error('Failed to parse metrics', e);
             }
@@ -103,20 +135,12 @@
         };
     }
 
-    onMount(() => {
-        fetchSystemInfo();
-    });
-
     $effect(() => {
-        connectEvents();
-        connectMetrics();
-        fetchNetwork();
-        fetchPackages();
+        if (auth.isAuthenticated) {
+            fetchSystemInfo();
+            connectMetrics();
+        }
         return () => {
-            if (eventSocket) {
-                eventSocket.close();
-                eventSocket = null;
-            }
             if (metricsSocket) {
                 metricsSocket.close();
                 metricsSocket = null;
@@ -125,138 +149,96 @@
     });
 </script>
 
-<div class="p-4 space-y-6">
-    <h1 class="text-2xl font-bold">zOS Management</h1>
-
-    {#if auth.isAuthenticated}
-        <div class="bg-green-100 p-4 rounded">
-            <p>Welcome, <strong>{auth.user}</strong>!</p>
+<div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <p class="text-sm text-text-muted">Systems Overview</p>
+            <h1 class="text-3xl font-bold text-text-main">Dashboard</h1>
         </div>
-    {:else}
-        <form onsubmit={handleLogin} class="bg-gray-100 p-4 rounded max-w-sm space-y-4">
+        <div class="text-xs text-text-muted">Live 1s interval</div>
+    </div>
+
+    {#if systemInfo}
+        <div class="bg-bg-card shadow rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border border-border-main">
             <div>
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
-                    Username
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="username" type="text" bind:value={username}>
+                <span class="block text-text-muted">Hostname</span>
+                <span class="font-bold text-text-main">{systemInfo.hostname}</span>
             </div>
             <div>
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
-                    Password
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" id="password" type="password" bind:value={password}>
+                <span class="block text-text-muted">Kernel</span>
+                <span class="font-bold text-text-main">{systemInfo.kernel_version}</span>
             </div>
-            <div class="flex items-center justify-between">
-                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
-                    Sign In
-                </button>
+            <div>
+                <span class="block text-text-muted">Uptime</span>
+                <span class="font-bold text-text-main">{systemInfo.uptime}</span>
             </div>
-        </form>
+            <div>
+                 <span class="block text-text-muted">Status</span>
+                 <span class="text-green-600 font-bold">● Online</span>
+            </div>
+        </div>
     {/if}
 
-    <div class="grid gap-4 md:grid-cols-2">
-        <div class="bg-white shadow rounded p-4">
-            <h2 class="text-lg font-semibold mb-2">System Info</h2>
-            {#if systemInfo}
-                <dl class="space-y-1 text-sm">
-                    <div class="flex justify-between">
-                        <dt class="font-medium text-gray-600">Hostname</dt>
-                        <dd class="font-mono text-gray-900">{systemInfo.hostname}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="font-medium text-gray-600">Kernel</dt>
-                        <dd class="font-mono text-gray-900">{systemInfo.kernel_version}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="font-medium text-gray-600">Uptime (s)</dt>
-                        <dd class="font-mono text-gray-900">{systemInfo.uptime}</dd>
-                    </div>
-                </dl>
-            {:else}
-                <p class="text-sm text-gray-500">Loading system info…</p>
-            {/if}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-bg-card border border-border-main rounded-lg p-4 shadow">
+            <p class="text-xs uppercase tracking-wide text-text-muted">CPU</p>
+            <p class="text-2xl font-semibold text-text-main">{formatPercent(latestCpu)}</p>
+            <p class="text-xs text-text-muted">User + System</p>
         </div>
-
-        <div class="bg-white shadow rounded p-4">
-            <h2 class="text-lg font-semibold mb-2">External Events</h2>
-            {#if events.length === 0}
-                <p class="text-sm text-gray-500">No events yet.</p>
-            {:else}
-                <ul class="space-y-2 max-h-64 overflow-y-auto text-sm">
-                    {#each events as event}
-                        <li class="border rounded p-2">
-                            <div class="text-gray-700 font-medium">{event.type}</div>
-                            {#if event.path}
-                                <div class="font-mono text-gray-800 text-xs break-all">{event.path}</div>
-                            {/if}
-                            <div class="text-gray-500 text-xs">{event.ts}</div>
-                        </li>
-                    {/each}
-                </ul>
-            {/if}
+        <div class="bg-bg-card border border-border-main rounded-lg p-4 shadow">
+            <p class="text-xs uppercase tracking-wide text-text-muted">Memory</p>
+            <p class="text-2xl font-semibold text-text-main">{formatBytes(latestRam + latestArc)}</p>
+            <p class="text-xs text-text-muted">Free: {formatBytes(latestFree)}</p>
         </div>
-
-        <div class="bg-white shadow rounded p-4">
-            <h2 class="text-lg font-semibold mb-2">Metrics</h2>
-            {#if metrics}
-                <dl class="space-y-1 text-sm">
-                    <div class="flex justify-between">
-                        <dt class="font-medium text-gray-600">CPU User</dt>
-                        <dd class="font-mono text-gray-900">{metrics.cpu_user}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="font-medium text-gray-600">CPU Idle</dt>
-                        <dd class="font-mono text-gray-900">{metrics.cpu_idle}</dd>
-                    </div>
-                </dl>
-            {:else}
-                <p class="text-sm text-gray-500">Waiting for metrics…</p>
-            {/if}
+        <div class="bg-bg-card border border-border-main rounded-lg p-4 shadow">
+            <p class="text-xs uppercase tracking-wide text-text-muted">ZFS ARC</p>
+            <p class="text-2xl font-semibold text-text-main">{formatBytes(latestArc)}</p>
+            <p class="text-xs text-text-muted">Cache footprint</p>
         </div>
-
-        <div class="bg-white shadow rounded p-4">
-            <h2 class="text-lg font-semibold mb-2">Network Interfaces</h2>
-            {#if interfaces.length === 0}
-                <p class="text-sm text-gray-500">No interfaces yet.</p>
-            {:else}
-                <ul class="space-y-1 text-sm">
-                    {#each interfaces as iface}
-                        <li class="flex justify-between border rounded px-2 py-1">
-                            <span class="font-mono">{iface.name}</span>
-                            <span class="text-gray-700">{iface.address}</span>
-                            <span class="text-gray-500">{iface.state}</span>
-                        </li>
-                    {/each}
-                </ul>
-            {/if}
+        <div class="bg-bg-card border border-border-main rounded-lg p-4 shadow">
+            <p class="text-xs uppercase tracking-wide text-text-muted">Network</p>
+            <p class="text-2xl font-semibold text-text-main">{formatBytes(latestNetRx)}/s</p>
+            <p class="text-xs text-text-muted">TX: {formatBytes(latestNetTx)}/s</p>
         </div>
+    </div>
 
-        <div class="bg-white shadow rounded p-4 md:col-span-2">
-            <h2 class="text-lg font-semibold mb-2">Packages</h2>
-            {#if packages.length === 0}
-                <p class="text-sm text-gray-500">No packages yet.</p>
-            {:else}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead>
-                            <tr class="text-left text-gray-600">
-                                <th class="py-1 pr-4">Name</th>
-                                <th class="py-1 pr-4">Version</th>
-                                <th class="py-1 pr-4">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each packages as pkg}
-                                <tr class="border-t">
-                                    <td class="py-1 pr-4 font-mono">{pkg.name}</td>
-                                    <td class="py-1 pr-4 font-mono">{pkg.version}</td>
-                                    <td class="py-1 pr-4">{pkg.status}</td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
-            {/if}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <MetricGraph 
+            title="CPU Usage (%)"
+            labels={labels}
+            yMin={0}
+            yMax={100}
+            formatValue={formatPercent}
+            datasets={[
+                { label: 'CPU Usage', data: cpuData, color: '#2563eb', fill: true }
+            ]}
+        />
+
+        <MetricGraph 
+            title="Memory (used / ARC / free)"
+            labels={labels}
+            stacked={true}
+            formatValue={formatBytes}
+            datasets={[
+                { label: 'Used (excl. ARC)', data: ramUsed, color: '#7c3aed', fill: true, stack: 'mem' },
+                { label: 'ZFS ARC', data: ramArc, color: '#059669', fill: true, stack: 'mem' },
+                { label: 'Free', data: ramFree, color: '#9ca3af', fill: true, stack: 'mem' }
+            ]}
+        />
+
+        <MetricGraph 
+            title="Network Traffic"
+            labels={labels}
+            formatValue={(v) => `${formatBytes(v)}/s`}
+            datasets={[
+                { label: 'RX (In)', data: netRx, color: '#16a34a', fill: false },
+                { label: 'TX (Out)', data: netTx, color: '#2563eb', fill: false }
+            ]}
+        />
+
+        <div class="bg-bg-card p-4 rounded shadow border border-border-main flex flex-col h-64 items-start justify-center text-text-muted">
+            <span class="text-lg font-bold text-text-main mb-2">Storage / IOPS</span>
+            <span class="text-sm">Hook metrics actor once ZFS polling lands.</span>
         </div>
     </div>
 </div>
