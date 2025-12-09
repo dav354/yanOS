@@ -23,6 +23,16 @@
         i18n.setLang(newLang);
         lang = newLang;
     }
+
+    function confirmLogout(event) {
+        event.preventDefault();
+        if (confirm(i18n.t('nav.confirmLogout'))) {
+            // simple client-side logout: clear session cookie via redirect
+            fetch('/api/v1/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+                window.location.href = '/login';
+            });
+        }
+    }
 </script>
 
 <aside class="w-64 bg-bg-sidebar text-text-sidebar flex flex-col h-full border-r border-border-main">
@@ -44,6 +54,14 @@
                 </li>
             {/each}
         </ul>
+        <div class="mt-4 px-4">
+            <button
+                onclick={confirmLogout}
+                class="w-full text-left px-4 py-2 text-sm font-medium rounded border border-border-main text-red-400 hover:bg-red-500/10 hover:text-red-200 transition-colors"
+            >
+                {i18n.t('nav.logout')}
+            </button>
+        </div>
     </nav>
     
     <div class="p-4 border-t border-border-main bg-bg-sidebar space-y-2">

@@ -9,6 +9,8 @@ const translations = {
             packages: 'Packages',
             logs: 'Logs',
             settings: 'Settings',
+            logout: 'Logout',
+            confirmLogout: 'Do you really want to log out?',
         },
         sidebar: {
             systemOnline: 'System: Online',
@@ -70,6 +72,8 @@ const translations = {
             packages: 'Pakete',
             logs: 'Logs',
             settings: 'Einstellungen',
+            logout: 'Abmelden',
+            confirmLogout: 'Möchtest du dich wirklich abmelden?',
         },
         sidebar: {
             systemOnline: 'System: Online',
