@@ -52,11 +52,24 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
 
     let pty_system = NativePtySystem::default();
 
-    let mut cmd = CommandBuilder::new("/usr/bin/login");
-    cmd.arg("-f");
-    cmd.arg(&username);
-    cmd.env("TERM", "xterm-256color");
-    cmd.env("LANG", "en_US.UTF-8");
+    let build_login = || {
+        let mut cmd = CommandBuilder::new("/usr/bin/login");
+        cmd.arg("-f");
+        cmd.arg(&username);
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("LANG", "en_US.UTF-8");
+        cmd
+    };
+
+    let build_shell = || {
+        let mut cmd = CommandBuilder::new("/usr/bin/bash");
+        cmd.arg("-l");
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("LANG", "en_US.UTF-8");
+        cmd.env("USER", &username);
+        cmd.env("LOGNAME", &username);
+        cmd
+    };
 
     let pair = pty_system
         .openpty(PtySize {
@@ -67,10 +80,23 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
         })
         .map_err(|e| AppError::InternalServerError(format!("openpty failed: {e}")))?;
 
-    let mut child = pair
-        .slave
-        .spawn_command(cmd)
-        .map_err(|e| AppError::InternalServerError(format!("spawn login failed: {e}")))?;
+    let mut child = if username != "root" {
+        match pair.slave.spawn_command(build_login()) {
+            Ok(child) => child,
+            Err(e) => {
+                // Fall back to shell if login -f is not permitted (e.g., not console or not root)
+                info!(target: "zos::terminal_actor", error=?e, "login -f failed, falling back to shell");
+                pair.slave.spawn_command(build_shell()).map_err(|e| {
+                    AppError::InternalServerError(format!("spawn shell failed: {e}"))
+                })?
+            }
+        }
+    } else {
+        // root is often blocked via login -f outside console; go straight to shell
+        pair.slave
+            .spawn_command(build_shell())
+            .map_err(|e| AppError::InternalServerError(format!("spawn shell failed: {e}")))?
+    };
 
     drop(pair.slave);
 
