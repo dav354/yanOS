@@ -140,7 +140,11 @@ pub async fn login_handler(
             if retval != PAM_SUCCESS_I32 {
                 let msg = pam_strerror(pam_h, retval)
                     .as_ref()
-                    .map(|c_str| std::ffi::CStr::from_ptr(c_str).to_string_lossy().into_owned())
+                    .map(|c_str| {
+                        std::ffi::CStr::from_ptr(c_str)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
                     .unwrap_or_else(|| "Failed to start PAM transaction".to_string());
                 return Err(msg);
             }
@@ -152,7 +156,11 @@ pub async fn login_handler(
                 let _ = pam_end(pam_h, retval);
                 let msg = pam_strerror(pam_h, retval)
                     .as_ref()
-                    .map(|c_str| std::ffi::CStr::from_ptr(c_str).to_string_lossy().into_owned())
+                    .map(|c_str| {
+                        std::ffi::CStr::from_ptr(c_str)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
                     .unwrap_or_else(|| "Authentication failed".to_string());
                 return Err(msg);
             }
