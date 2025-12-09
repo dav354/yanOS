@@ -1,9 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="deployFrontend" type="JustRunConfiguration" factoryName="JustRunConfiguration">
-    <option name="envVariables" />
-    <option name="fileName" value="justfile" />
-    <option name="recipeArgs" />
-    <option name="recipeName" value="dev-frontend-remote" />
-    <method v="2" />
-  </configuration>
-</component>
