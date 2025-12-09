@@ -5,6 +5,7 @@ use axum::{Router, middleware};
 
 pub mod events;
 pub mod health;
+pub mod logs;
 pub mod metrics;
 pub mod resources;
 pub mod status;
@@ -20,6 +21,7 @@ pub fn mod_routes() -> Router<AppState> {
         .merge(resources::routes())
         .route("/events", get(events::stream_events))
         .route("/metrics/live", get(metrics::live_metrics))
+        .route("/logs", get(logs::list_logs))
         .route("/terminal", get(terminal::ws_handler)) // Add terminal route
         .route_layer(middleware::from_fn(auth::auth_guard));
 

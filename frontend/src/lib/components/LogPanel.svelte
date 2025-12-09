@@ -24,8 +24,8 @@
         ws.onmessage = (evt) => {
             try {
                 const payload = JSON.parse(evt.data);
-                // Prepend new events
-                events = [{ ...payload, ts: new Date().toISOString() }, ...events].slice(0, 50);
+                // Prepend new events (payload already has ts)
+                events = [payload, ...events].slice(0, 200);
             } catch (e) {
                 console.error('Failed to parse event', e);
             }
@@ -79,12 +79,15 @@
                     {#each events as event}
                         <tr class="hover:bg-white/5">
                             <td class="whitespace-nowrap text-text-sidebar-muted py-0.5 w-40">{event.ts.split('T')[1].replace('Z','')}</td>
-                            <td class="whitespace-nowrap text-primary py-0.5 w-32 font-bold">{event.type}</td>
+                            <td class="whitespace-nowrap text-primary py-0.5 w-32 font-bold">{event.event?.type}</td>
                             <td class="text-text-sidebar py-0.5 break-all">
-                                {#if event.path}
-                                    <span class="text-yellow-600 mr-2">[{event.path}]</span>
+                                {#if event.event?.line}
+                                    {event.event.line}
+                                {:else if event.event?.path}
+                                    <span class="text-yellow-600 mr-2">[{event.event.path}]</span>
+                                {:else}
+                                    {JSON.stringify(event.event ?? event).substring(0, 100)}...
                                 {/if}
-                                {JSON.stringify(event).substring(0, 100)}...
                             </td>
                         </tr>
                     {/each}

@@ -65,12 +65,17 @@ async fn main() -> Result<(), AppError> {
         .map_err(AppError::from)?;
     tls_state.spawn_reload_task();
 
-    let event_bus = EventBus::new(128);
+    let event_bus = EventBus::new(1024);
 
     // Keep watchers and actors alive for the process lifetime.
-    let _config_watcher = watchers::start_filesystem_watcher(Path::new("/etc"), event_bus.sender())
+    let _config_watcher = watchers::start_filesystem_watcher(Path::new("/etc"), event_bus.clone())
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to start watcher: {e}")))?;
+    let _log_watcher =
+        watchers::start_system_log_watcher(Path::new("/var/adm/messages"), event_bus.clone())
+            .map_err(|e| {
+                AppError::InternalServerError(format!("Failed to start log watcher: {e}"))
+            })?;
 
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor();

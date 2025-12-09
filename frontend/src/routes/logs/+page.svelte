@@ -7,11 +7,15 @@
     let filterLevel = $state('all');
     let sortMode = $state('time'); // 'time' or 'level'
     let socket = null;
+    let oldestTs = $state(null);
+    let isLoadingMore = $state(false);
 
     function levelFor(event) {
         const t = (event.type || '').toLowerCase();
         if (t.includes('failed') || t.includes('error')) return 'error';
-        if (t.includes('down')) return 'warn';
+        if (t.includes('down') || t.includes('warn')) return 'warn';
+        if (event.line && /error|fail/i.test(event.line)) return 'error';
+        if (event.line && /warn/i.test(event.line)) return 'warn';
         return 'info';
     }
 
@@ -19,6 +23,8 @@
         switch (event.type) {
             case 'config_changed':
                 return `ConfigChanged path=${event.path ?? ''}`;
+            case 'system_log':
+                return event.line ?? '';
             case 'service_started':
                 return `ServiceStarted fmri=${event.fmri ?? ''}`;
             case 'service_stopped':
@@ -35,6 +41,32 @@
                 return `LinkDown name=${event.name ?? ''}`;
             default:
                 return JSON.stringify(event);
+        }
+    }
+
+    function ingest(logged) {
+        const ev = logged.event ?? logged;
+        const level = levelFor(ev);
+        const text = `[${logged.ts}] [${level.toUpperCase()}] ${asText(ev)}`;
+        entries = [{ ts: logged.ts, level, text }, ...entries].slice(0, 1000);
+        if (!oldestTs || logged.ts < oldestTs) {
+            oldestTs = logged.ts;
+        }
+    }
+
+    async function loadMore() {
+        if (isLoadingMore || !oldestTs) return;
+        isLoadingMore = true;
+        try {
+            const res = await fetch(`/api/v1/logs?before=${encodeURIComponent(oldestTs)}&limit=200`);
+            if (res.ok) {
+                const data = await res.json();
+                data.forEach((log) => ingest(log));
+            }
+        } catch (err) {
+            console.error('Failed to load more logs', err);
+        } finally {
+            isLoadingMore = false;
         }
     }
 
@@ -55,10 +87,7 @@
         socket.onmessage = (evt) => {
             try {
                 const event = JSON.parse(evt.data);
-                const level = levelFor(event);
-                const ts = new Date().toISOString();
-                const text = `[${ts}] [${level.toUpperCase()}] ${asText(event)}`;
-                entries = [{ ts, level, text }, ...entries].slice(0, 200);
+                ingest(event);
             } catch (err) {
                 console.error('Failed to parse event', err);
             }
@@ -132,7 +161,14 @@
             {#if viewEntries.length === 0}
                 <div class="p-4 text-text-muted">{i18n.t('logs.none')}</div>
             {:else}
-                <pre class="m-0 p-4 text-sm font-mono text-text-main whitespace-pre-wrap leading-relaxed">
+                <pre
+                    class="m-0 p-4 text-sm font-mono text-text-main whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-auto"
+                    onscroll={(e) => {
+                        if (e.target.scrollTop === 0) {
+                            loadMore();
+                        }
+                    }}
+                >
 {#each viewEntries as entry}
 {entry.text}
 {/each}</pre>
