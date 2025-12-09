@@ -1,5 +1,6 @@
 <script>
     import { auth } from '$lib/auth.svelte.js';
+    import { i18n } from '$lib/i18n.svelte.js';
 
     let packages = $state([]);
     let isLoading = $state(false);
@@ -28,17 +29,17 @@
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-bold text-text-main">Installed Packages</h1>
+        <h1 class="text-3xl font-bold text-text-main">{i18n.t('packages.title')}</h1>
         <button onclick={fetchPackages} class="text-primary hover:text-primary-hover text-sm font-medium">
-            ↻ Refresh
+            ↻ {i18n.t('packages.refresh')}
         </button>
     </div>
 
     <div class="bg-bg-card shadow-md rounded-lg overflow-hidden border border-border-main">
         {#if isLoading && packages.length === 0}
-            <div class="p-8 text-center text-text-muted">Loading package list...</div>
+            <div class="p-8 text-center text-text-muted">{i18n.t('packages.loading')}</div>
         {:else if packages.length === 0}
-            <div class="p-8 text-center text-text-muted">No packages found (or unable to fetch).</div>
+            <div class="p-8 text-center text-text-muted">{i18n.t('packages.empty')}</div>
         {:else}
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-border-main">

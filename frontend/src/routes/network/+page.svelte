@@ -1,5 +1,6 @@
 <script>
     import { auth } from '$lib/auth.svelte.js';
+    import { i18n } from '$lib/i18n.svelte.js';
 
     let interfaces = $state([]);
     let isLoading = $state(false);
@@ -28,17 +29,17 @@
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-bold text-text-main">Network Interfaces</h1>
+        <h1 class="text-3xl font-bold text-text-main">{i18n.t('network.title')}</h1>
         <button onclick={fetchNetwork} class="text-primary hover:text-primary-hover text-sm font-medium">
-            ↻ Refresh
+            ↻ {i18n.t('network.refresh')}
         </button>
     </div>
 
     <div class="bg-bg-card shadow-md rounded-lg overflow-hidden border border-border-main">
         {#if isLoading && interfaces.length === 0}
-            <div class="p-8 text-center text-text-muted">Loading interfaces...</div>
+            <div class="p-8 text-center text-text-muted">{i18n.t('network.loading')}</div>
         {:else if interfaces.length === 0}
-            <div class="p-8 text-center text-text-muted">No interfaces found.</div>
+            <div class="p-8 text-center text-text-muted">{i18n.t('network.empty')}</div>
         {:else}
             <table class="min-w-full divide-y divide-border-main">
                 <thead class="bg-bg-main">

@@ -1,5 +1,6 @@
 <script>
     import { auth } from '$lib/auth.svelte.js';
+    import { i18n } from '$lib/i18n.svelte.js';
 
     const severityOrder = { info: 0, warn: 1, error: 2 };
     let entries = $state([]);
@@ -99,37 +100,37 @@
 <section class="p-6 space-y-4">
     <header class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-text-main">System Logs</h1>
-            <p class="text-text-muted">Live events in Klartext, filter- und sortierbar.</p>
+            <h1 class="text-2xl font-bold text-text-main">{i18n.t('logs.title')}</h1>
+            <p class="text-text-muted">{i18n.t('logs.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2">
             <select
                 class="border border-border-main bg-bg-card text-text-main text-sm rounded px-2 py-1"
                 bind:value={filterLevel}
             >
-                <option value="all">Alle Level</option>
-                <option value="error">Error</option>
-                <option value="warn">Warn</option>
-                <option value="info">Info</option>
+                <option value="all">{i18n.t('logs.filterAll')}</option>
+                <option value="error">{i18n.t('logs.filterError')}</option>
+                <option value="warn">{i18n.t('logs.filterWarn')}</option>
+                <option value="info">{i18n.t('logs.filterInfo')}</option>
             </select>
             <select
                 class="border border-border-main bg-bg-card text-text-main text-sm rounded px-2 py-1"
                 bind:value={sortMode}
             >
-                <option value="time">Neueste zuerst</option>
-                <option value="level">Nach Level sortieren</option>
+                <option value="time">{i18n.t('logs.sortTime')}</option>
+                <option value="level">{i18n.t('logs.sortLevel')}</option>
             </select>
         </div>
     </header>
 
     {#if !auth.isAuthenticated}
         <div class="bg-amber-50 text-amber-800 border border-amber-200 rounded p-4">
-            Bitte zuerst anmelden, um Logs zu sehen.
+            {i18n.t('logs.unauth')}
         </div>
     {:else}
         <div class="border border-border-main rounded bg-bg-card overflow-hidden">
             {#if viewEntries.length === 0}
-                <div class="p-4 text-text-muted">Noch keine Events empfangen.</div>
+                <div class="p-4 text-text-muted">{i18n.t('logs.none')}</div>
             {:else}
                 <pre class="m-0 p-4 text-sm font-mono text-text-main whitespace-pre-wrap leading-relaxed">
 {#each viewEntries as entry}

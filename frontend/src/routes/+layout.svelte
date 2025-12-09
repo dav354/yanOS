@@ -6,7 +6,7 @@
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
     import Sidebar from '$lib/components/Sidebar.svelte';
-    import LogPanel from '$lib/components/LogPanel.svelte';
+    import TasksPanel from '$lib/components/TasksPanel.svelte';
 
     let { children } = $props();
 
@@ -49,8 +49,8 @@
                 {/if}
             </main>
 
-            <!-- Bottom Log Panel -->
-            <LogPanel />
+            <!-- Bottom Task Panel -->
+            <TasksPanel />
         </div>
     </div>
 {/if}
