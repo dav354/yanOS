@@ -56,12 +56,18 @@
 
 <div class="bg-bg-sidebar text-text-sidebar border-t border-border-main flex flex-col transition-all duration-300 {isExpanded ? 'h-48' : 'h-8'}">
     <!-- Header / Toggle Bar -->
-    <div class="flex items-center justify-between px-2 py-1 bg-white/5 border-b border-border-main cursor-pointer select-none" onclick={toggle}>
+    <button
+        class="flex items-center justify-between px-2 py-1 bg-white/5 border-b border-border-main cursor-pointer select-none text-left"
+        onclick={toggle}
+        onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
+        aria-expanded={isExpanded}
+        type="button"
+    >
         <span class="text-xs font-bold uppercase tracking-wide text-text-sidebar-muted">System Logs / Events</span>
-        <button class="text-text-sidebar-muted hover:text-text-sidebar text-xs">
+        <span class="text-text-sidebar-muted hover:text-text-sidebar text-xs">
             {isExpanded ? '▼' : '▲'}
-        </button>
-    </div>
+        </span>
+    </button>
 
     <!-- Log Content -->
     <div class="flex-1 overflow-auto font-mono text-xs p-2 bg-black/20">

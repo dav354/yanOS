@@ -2,17 +2,17 @@
     import { onMount, onDestroy } from 'svelte';
     import Chart from 'chart.js/auto';
 
-    let { 
-        title = "Metric", 
+    let {
+        title = "Metric",
         data = [], // Array of objects or values
         labels = [], // Array of time labels
         datasets = [], // Array of dataset configs { label, data, color, fill }
         yMin = 0,
         yMax = null,
         formatValue = (v) => v,
-        type = 'line'
+        type = 'line',
+        stacked = false,
     } = $props();
-    let { stacked = false } = $props();
 
     let canvas;
     let chart;

@@ -14,10 +14,10 @@ class AuthStore {
 
     async init() {
         try {
-            const res = await fetch('/api/v1/status');
+            const res = await fetch('/api/v1/status', { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
-                this.csrfToken = data.csrf_token;
+                this.csrfToken = this.readCsrfFromCookie();
                 this.user = data.user ?? null;
             }
         } catch (e) {
@@ -27,17 +27,26 @@ class AuthStore {
         }
     }
 
+    readCsrfFromCookie() {
+        if (!browser) return null;
+        const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
     async login(username, password) {
         if (!this.csrfToken) {
             await this.init();
         }
 
-        const res = await fetch('/api/login', {
+        const token = this.csrfToken ?? this.readCsrfFromCookie();
+
+        const res = await fetch('/api/v1/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': this.csrfToken
+                ...(token ? { 'X-CSRF-TOKEN': token } : {})
             },
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
 

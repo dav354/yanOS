@@ -1,4 +1,6 @@
 <script>
+    export const prerender = true;
+
     import '../app.css';
     import { auth } from '$lib/auth.svelte.js';
     import { page } from '$app/stores';
@@ -6,6 +8,7 @@
     import Sidebar from '$lib/components/Sidebar.svelte';
     import LogPanel from '$lib/components/LogPanel.svelte';
 
+    let { children } = $props();
     let isLoginPage = $derived($page.url.pathname === '/login');
 
     $effect(() => {
@@ -21,7 +24,7 @@
         <div class="text-gray-500">Loading zOS...</div>
     </div>
 {:else if isLoginPage}
-    <slot />
+    {@render children?.()}
 {:else}
     <!-- Main App Layout -->
     <div class="flex h-screen w-screen bg-bg-main text-text-main overflow-hidden font-sans transition-colors duration-200">
@@ -36,7 +39,7 @@
             <!-- Main Page Content (Scrollable) -->
             <main class="flex-1 overflow-y-auto p-4 relative">
                 {#if auth.isAuthenticated}
-                    <slot />
+                    {@render children?.()}
                 {:else}
                      <!-- Protected Route Guard -->
                      <div class="flex flex-col items-center justify-center h-full">
