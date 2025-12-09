@@ -73,6 +73,7 @@ async fn main() -> Result<(), AppError> {
 
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor();
+    let metrics_state = actors::start_metrics_actor(); // Start metrics
 
     let session_store = auth::memory_store();
     let session_layer = auth::create_session_layer(session_store.clone());
@@ -84,14 +85,16 @@ async fn main() -> Result<(), AppError> {
         event_bus.clone(),
         network_actor.clone(),
         pkg_actor.clone(),
+        metrics_state, // Pass metrics state
     );
 
-    let app = api::create_router(app_state.clone());
+    let app = api::create_router();
 
     let app = auth::add_auth_routes(app)
         .layer(CsrfLayer::new(csrf_config))
         .layer(session_layer)
-        .layer(CookieManagerLayer::new());
+        .layer(CookieManagerLayer::new())
+        .with_state(app_state);
 
     let https_addr = SocketAddr::from(([0, 0, 0, 0], 8443));
     tokio::spawn(async {
@@ -104,7 +107,7 @@ async fn main() -> Result<(), AppError> {
     info!(target: "zos::main", "Swagger UI available at https://{}/swagger-ui", https_addr);
 
     axum_server::bind_rustls(https_addr, tls_state.config())
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .map_err(AppError::from)?;
 

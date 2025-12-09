@@ -13,7 +13,7 @@ async fn test_healthz_returns_ok() {
 
     let request = Request::builder()
         .method(Method::GET)
-        .uri("/healthz")
+        .uri("/api/v1/healthz")
         .body(Body::empty())
         .unwrap();
 
@@ -33,7 +33,7 @@ async fn test_readyz_when_tls_present() {
 
     let request = Request::builder()
         .method(Method::GET)
-        .uri("/readyz")
+        .uri("/api/v1/readyz")
         .body(Body::empty())
         .unwrap();
 
@@ -56,12 +56,13 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
         app_state.event_bus.clone(),
         app_state.network_actor.clone(),
         app_state.pkg_actor.clone(),
+        app_state.metrics_state.clone(),
     );
-    let app_with_failing_session = api::create_router(new_app_state_for_test);
+    let app_with_failing_session = api::create_router().with_state(new_app_state_for_test);
 
     let request = Request::builder()
         .method(Method::GET)
-        .uri("/readyz")
+        .uri("/api/v1/readyz")
         .body(Body::empty())
         .unwrap();
 

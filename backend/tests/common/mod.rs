@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use axum::Router;
 use http_body_util::BodyExt;
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tower_sessions::SessionStore;
 use tower_sessions_core::session::{Id, Record};
 use tower_sessions_core::session_store;
@@ -28,6 +28,7 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
     let event_bus = EventBus::new(8);
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor();
+    let metrics_state = actors::start_metrics_actor();
 
     let app_state = api::AppState::new(
         csrf_config.clone(),
@@ -36,10 +37,11 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
         event_bus,
         network_actor,
         pkg_actor,
+        metrics_state,
     );
 
     let shared_state = app_state.clone();
-    let app = api::create_router(app_state);
+    let app = api::create_router().with_state(app_state);
 
     let app = auth::add_auth_routes(app)
         .layer(axum_csrf::CsrfLayer::new(csrf_config))

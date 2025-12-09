@@ -1,9 +1,25 @@
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExternalEvent {
-    ConfigChanged(PathBuf),
+    // Config Changes
+    ConfigChanged { path: PathBuf },
+    
+    // Service Events
+    ServiceStarted { fmri: String },
+    ServiceStopped { fmri: String },
+    ServiceFailed { fmri: String },
+
+    // ZFS Events
+    DatasetCreated { name: String },
+    DatasetDestroyed { name: String },
+
+    // Network
+    LinkUp { name: String },
+    LinkDown { name: String },
 }
 
 /// A simple broadcast bus for streaming external change events to subscribers.

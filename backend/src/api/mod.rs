@@ -1,56 +1,40 @@
+use axum::Router;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+// Route handlers need to be public for utoipa macro to see them
+pub use crate::api::routes::{health, resources, status};
+
 pub mod routes;
 pub mod state;
 
-use axum::{Router, middleware, routing::get};
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
-
-use crate::auth;
-pub use state::AppState;
+// Re-export AppState
+pub use state::AppState; 
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        routes::status::api_status,
-        routes::health::healthz_handler,
-        routes::health::readyz_handler,
-        crate::auth::pam::login_handler,
-        routes::status::system_info,
-        routes::resources::list_network,
-        routes::resources::list_packages,
+        health::healthz,
+        health::readyz,
+        status::get_status,
+        resources::create_dataset,
     ),
     components(
-        schemas(auth::LoginPayload)
+        schemas(
+            status::StatusResponse,
+            resources::CreateDatasetRequest,
+            resources::CreateDatasetResponse,
+            // crate::error::ErrorResponse // If this doesn't exist, we should remove it or define it.
+            // Using generic error for now or checking if we can use a local struct.
+        )
     ),
     tags(
-        (name = "zOS", description = "zOS Management API")
-    ),
-    info(
-        title = "zOS API",
-        version = "1.0.0",
-        description = "API for managing the zOS Storage Appliance",
+        (name = "zos", description = "zOS Management API")
     )
 )]
-pub struct ApiDoc;
+struct ApiDoc;
 
-/// Creates the main API router, including the Swagger UI.
-pub fn create_router(app_state: AppState) -> Router {
-    let protected_routes = Router::new()
-        .route("/events", axum::routing::get(routes::stream_events))
-        .route("/metrics/live", axum::routing::get(routes::stream_metrics))
-        .route_layer(middleware::from_fn(auth::auth_guard));
-
-    let api_routes = Router::new()
-        .route("/status", get(routes::api_status))
-        .route("/system/info", get(routes::system_info))
-        .route("/network/interfaces", get(routes::list_network))
-        .route("/pkg/list", get(routes::list_packages))
-        .merge(protected_routes);
-
+pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/healthz", get(routes::healthz_handler))
-        .route("/readyz", get(routes::readyz_handler))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .nest("/api/v1", api_routes)
-        .with_state(app_state)
+        .nest("/api/v1", routes::mod_routes())
 }

@@ -40,6 +40,9 @@ rand = "0.8.5"
 rand_core = "0.6.4"
 time = "0.3"
 axum_csrf = { version = "0.11.0", features = ["layer"] }
+sysinfo = "0.37.2"
+chrono = "0.4.42"
+futures = "0.3.31"
 
 [dev-dependencies]
 http-body-util = "0.1"

@@ -27,7 +27,7 @@ pub fn add_auth_routes<S>(router: Router<S>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    router.route("/api/login", post(login_handler))
+    router.route("/api/v1/login", post(login_handler))
 }
 
 /// Struct to hold the credentials for the PAM conversation callback.
@@ -87,7 +87,7 @@ unsafe extern "C" fn pam_conversation(
 /// Handles the login request, authenticating against PAM.
 #[utoipa::path(
     post,
-    path = "/api/login",
+    path = "/api/v1/login",
     request_body = LoginPayload,
     responses(
         (status = 200, description = "Authentication successful"),

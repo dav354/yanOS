@@ -22,7 +22,7 @@ pub async fn start_filesystem_watcher(
             ) {
                 let target = event.paths.get(0).cloned();
                 if let Some(p) = target {
-                    if let Err(err) = tx.send(ExternalEvent::ConfigChanged(p.clone())) {
+                    if let Err(err) = tx.send(ExternalEvent::ConfigChanged { path: p.clone() }) {
                         error!(target: "zos::watcher", error = ?err, "Failed to broadcast filesystem event");
                     } else {
                         info!(target: "zos::watcher", path = ?p, "External config change detected");

@@ -5,8 +5,15 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use tracing::error;
+use utoipa::ToSchema;
+
+/// API Error Response Schema
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
+}
 
 /// A unified error type for the application.
 #[derive(Debug)]
@@ -45,9 +52,9 @@ impl IntoResponse for AppError {
             }
         };
 
-        let body = Json(json!({
-            "error": error_message,
-        }));
+        let body = Json(ErrorResponse {
+            error: error_message,
+        });
 
         (status, body).into_response()
     }

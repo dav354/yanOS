@@ -35,7 +35,7 @@ async fn test_authenticated_api_access() {
 
     let login_request = Request::builder()
         .method(Method::POST)
-        .uri("/api/login")
+        .uri("/api/v1/login")
         .header("content-type", "application/json")
         .body(Body::from(login_payload))
         .unwrap();

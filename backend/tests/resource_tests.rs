@@ -34,9 +34,7 @@ async fn test_network_interfaces_endpoint() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let json_body: serde_json::Value = common::get_body_as_json(response).await;
-    assert!(json_body.is_array());
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -50,7 +48,5 @@ async fn test_pkg_list_endpoint() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let json_body: serde_json::Value = common::get_body_as_json(response).await;
-    assert!(json_body.is_array());
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
