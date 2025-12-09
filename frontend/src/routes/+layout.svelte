@@ -9,10 +9,9 @@
     import LogPanel from '$lib/components/LogPanel.svelte';
 
     let { children } = $props();
-    let isLoginPage = $derived($page.url.pathname === '/login');
 
     $effect(() => {
-        if (auth.isInitialized && !auth.isAuthenticated && !isLoginPage) {
+        if (auth.isInitialized && !auth.isAuthenticated && $page.url.pathname !== '/login') {
              goto('/login');
         }
     });
@@ -23,7 +22,7 @@
     <div class="flex h-screen w-screen items-center justify-center bg-gray-100">
         <div class="text-gray-500">Loading zOS...</div>
     </div>
-{:else if isLoginPage}
+{:else if $page.url.pathname === '/login'}
     {@render children?.()}
 {:else}
     <!-- Main App Layout -->

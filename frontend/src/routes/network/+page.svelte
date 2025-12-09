@@ -28,31 +28,31 @@
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-bold text-gray-800">Network Interfaces</h1>
-        <button onclick={fetchNetwork} class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+        <h1 class="text-3xl font-bold text-text-main">Network Interfaces</h1>
+        <button onclick={fetchNetwork} class="text-primary hover:text-primary-hover text-sm font-medium">
             ↻ Refresh
         </button>
     </div>
 
-    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+    <div class="bg-bg-card shadow-md rounded-lg overflow-hidden border border-border-main">
         {#if isLoading && interfaces.length === 0}
-            <div class="p-8 text-center text-gray-500">Loading interfaces...</div>
+            <div class="p-8 text-center text-text-muted">Loading interfaces...</div>
         {:else if interfaces.length === 0}
-            <div class="p-8 text-center text-gray-500">No interfaces found.</div>
+            <div class="p-8 text-center text-text-muted">No interfaces found.</div>
         {:else}
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <table class="min-w-full divide-y divide-border-main">
+                <thead class="bg-bg-main">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MAC / Details</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">State</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">IP Address</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">MAC / Details</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="bg-bg-card divide-y divide-border-main">
                     {#each interfaces as iface}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-mono">
+                        <tr class="hover:bg-bg-main transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-text-main font-mono">
                                 {iface.name}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -61,12 +61,12 @@
                                     {iface.state}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-text-muted font-mono">
                                 {iface.address}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-text-muted">
                                 <!-- Placeholder for more info if available -->
-                                <span class="text-xs text-gray-400">Via dladm/ipadm</span>
+                                <span class="text-xs text-text-muted">Via dladm/ipadm</span>
                             </td>
                         </tr>
                     {/each}
