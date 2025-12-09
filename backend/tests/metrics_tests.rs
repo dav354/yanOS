@@ -7,7 +7,7 @@ async fn test_metrics_collection_and_broadcast() {
     // Setup
     let (_cmd_tx, _cmd_rx) = mpsc::channel(10);
     let (broadcast_tx, mut broadcast_rx) = broadcast::channel(10);
-    
+
     // Start Actor
     let actor = MetricsActor::new(_cmd_rx, broadcast_tx);
     tokio::spawn(actor.run());
@@ -25,9 +25,9 @@ async fn test_metrics_collection_and_broadcast() {
             // CPU usage could be 0, but it should be a valid float
             assert!(point.cpu_user >= 0.0);
             assert!(point.cpu_idle >= 0.0);
-            
+
             println!("Received metric: {:?}", point);
-        },
+        }
         Err(e) => {
             panic!("Failed to receive metric from broadcast: {:?}", e);
         }

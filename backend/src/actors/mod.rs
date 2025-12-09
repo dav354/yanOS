@@ -1,7 +1,7 @@
+pub mod metrics;
 pub mod network;
 pub mod pkg;
-pub mod metrics;
 
-pub use network::{start_network_actor, NetworkActorHandle, NetworkMessage};
-pub use pkg::{start_pkg_actor, PkgActorHandle, PkgMessage};
-pub use metrics::{start_metrics_actor, MetricPoint, MetricsActor, MetricsCommand, MetricsState};
+pub use metrics::{MetricPoint, MetricsActor, MetricsCommand, MetricsState, start_metrics_actor};
+pub use network::{NetworkActorHandle, NetworkMessage, start_network_actor};
+pub use pkg::{PkgActorHandle, PkgMessage, start_pkg_actor};

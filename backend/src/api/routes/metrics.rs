@@ -1,8 +1,11 @@
+use crate::actors::MetricsState;
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State},
+    extract::{
+        State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
     response::IntoResponse,
 };
-use crate::actors::MetricsState;
 use std::sync::Arc;
 
 #[utoipa::path(
