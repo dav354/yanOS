@@ -81,7 +81,7 @@
                 </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 border-t border-border-main pt-3 mt-1">
                 <div class="text-text-main font-semibold sm:w-1/3" title={i18n.t('settings.themeLabel')}>
                     {i18n.t('settings.themeLabel')}
                 </div>
