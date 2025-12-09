@@ -14,12 +14,15 @@ class AuthStore {
 
     async init() {
         try {
-            const res = await fetch('/api/v1/status', { credentials: 'include' });
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch('/api/v1/status', { credentials: 'include', signal: controller.signal });
             if (res.ok) {
                 const data = await res.json();
                 this.csrfToken = this.readCsrfFromCookie();
                 this.user = data.user ?? null;
             }
+            clearTimeout(timeout);
         } catch (e) {
             console.error('Failed to init auth', e);
         } finally {
@@ -51,6 +54,7 @@ class AuthStore {
         });
 
         if (res.ok) {
+            this.csrfToken = this.readCsrfFromCookie();
             await this.init();
             this.user = username;
             return true;

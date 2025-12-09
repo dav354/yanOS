@@ -1,18 +1,22 @@
 <script>
-    export const prerender = true;
-
     import '../app.css';
     import { auth } from '$lib/auth.svelte.js';
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
     import Sidebar from '$lib/components/Sidebar.svelte';
-    import TasksPanel from '$lib/components/TasksPanel.svelte';
+    import LogPanel from '$lib/components/LogPanel.svelte';
 
     let { children } = $props();
 
     $effect(() => {
         if (auth.isInitialized && !auth.isAuthenticated && $page.url.pathname !== '/login') {
              goto('/login');
+        }
+    });
+
+    $effect(() => {
+        if (auth.isInitialized && auth.isAuthenticated && $page.url.pathname === '/login') {
+            goto('/');
         }
     });
 </script>
@@ -49,8 +53,8 @@
                 {/if}
             </main>
 
-            <!-- Bottom Task Panel -->
-            <TasksPanel />
+            <!-- Bottom Log Panel -->
+            <LogPanel />
         </div>
     </div>
 {/if}

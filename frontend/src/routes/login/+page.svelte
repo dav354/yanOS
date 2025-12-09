@@ -15,7 +15,11 @@
         try {
             const success = await auth.login(username, password);
             if (success) {
-                goto('/');
+                if (typeof window !== 'undefined') {
+                    window.location.href = '/';
+                } else {
+                    goto('/');
+                }
             } else {
                 error = 'Invalid credentials';
             }
