@@ -4,7 +4,7 @@ use std::ptr;
 use axum::{Json, Router, routing::post};
 use pam_sys::{
     PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PAM_SUCCESS, pam_authenticate, pam_end, pam_handle_t,
-    pam_message, pam_response, pam_start,
+    pam_message, pam_response, pam_start, pam_strerror,
 };
 use tower_sessions::Session;
 use tracing::{error, info, instrument};
@@ -107,6 +107,11 @@ pub async fn login_handler(
     // The PAM authentication needs to be run in a blocking thread
     // to avoid blocking the async runtime.
     let result = tokio::task::spawn_blocking(move || {
+        // Default to the dedicated "zos" PAM stack so we can avoid TTY-dependent modules.
+        let service_name = std::env::var("PAM_SERVICE_NAME").unwrap_or_else(|_| "zos".to_string());
+
+        let c_service =
+            CString::new(service_name.clone()).map_err(|_| "Invalid PAM service name")?;
         let c_user = CString::new(username).map_err(|_| "Invalid username")?;
         let c_pass = CString::new(password).map_err(|_| "Invalid password")?;
 
@@ -130,15 +135,14 @@ pub async fn login_handler(
 
         unsafe {
             // 1. Start PAM transaction
-            let retval = pam_start(
-                c"login".as_ptr(), // Service name
-                c_user.as_ptr(),
-                &conv,
-                &mut pam_h,
-            );
+            let retval = pam_start(c_service.as_ptr(), c_user.as_ptr(), &conv, &mut pam_h);
 
             if retval != PAM_SUCCESS_I32 {
-                return Err("Failed to start PAM transaction".to_string());
+                let msg = pam_strerror(pam_h, retval)
+                    .as_ref()
+                    .map(|c_str| std::ffi::CStr::from_ptr(c_str).to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "Failed to start PAM transaction".to_string());
+                return Err(msg);
             }
 
             // 2. Authenticate
@@ -146,14 +150,14 @@ pub async fn login_handler(
 
             if retval != PAM_SUCCESS_I32 {
                 let _ = pam_end(pam_h, retval);
-                return Err("Authentication failed".to_string());
+                let msg = pam_strerror(pam_h, retval)
+                    .as_ref()
+                    .map(|c_str| std::ffi::CStr::from_ptr(c_str).to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "Authentication failed".to_string());
+                return Err(msg);
             }
 
-            // 3. Account Management (optional but recommended)
-            // let retval = pam_acct_mgmt(pam_h, 0);
-            // if retval != PAM_SUCCESS { ... }
-
-            // 4. End PAM transaction
+            // 3. End PAM transaction
             pam_end(pam_h, PAM_SUCCESS_I32);
             Ok(())
         }
