@@ -1,15 +1,27 @@
-// backend/src/error.rs
+//! Unified error handling for the yanOS backend.
+//!
+//! This module provides a single `AppError` enum that maps to HTTP status codes
+//! and JSON error responses. All handlers should return `Result<T, AppError>`.
+//!
+//! # Error Mapping
+//! - `InternalServerError` -> 500
+//! - `IoError` -> 500 (generic message to avoid leaking internals)
+//! - `Unauthorized` -> 401
+//! - `ServiceUnavailable` -> 503
+//! - `BadRequest` -> 400
+//! - `NotFound` -> 404
 
 use axum::{
-    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use utoipa::ToSchema;
 
-/// API Error Response Schema
+/// JSON response body for API errors.
+/// Returned with appropriate HTTP status codes.
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
@@ -26,6 +38,10 @@ pub enum AppError {
     Unauthorized(String),
     /// Used when the service is not ready.
     ServiceUnavailable(String),
+    /// Used for invalid request parameters or body.
+    BadRequest(String),
+    /// Used when a requested resource is not found.
+    NotFound(String),
 }
 
 impl IntoResponse for AppError {
@@ -49,6 +65,14 @@ impl IntoResponse for AppError {
             AppError::ServiceUnavailable(msg) => {
                 error!("Service Unavailable: {}", msg);
                 (StatusCode::SERVICE_UNAVAILABLE, msg)
+            }
+            AppError::BadRequest(msg) => {
+                error!("Bad Request: {}", msg);
+                (StatusCode::BAD_REQUEST, msg)
+            }
+            AppError::NotFound(msg) => {
+                error!("Not Found: {}", msg);
+                (StatusCode::NOT_FOUND, msg)
             }
         };
 
