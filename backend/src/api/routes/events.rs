@@ -7,10 +7,25 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use tracing::instrument;
+use utoipa::ToSchema;
 
 use crate::events::EventBus;
 
+#[derive(ToSchema)]
+struct EventStreamUpgrade;
+
 #[instrument(skip(event_bus))]
+#[utoipa::path(
+    get,
+    path = "/api/v1/events",
+    tag = "events",
+    responses(
+        (status = 101, description = "WebSocket upgrade for live events", body = EventStreamUpgrade)
+    ),
+    security(
+        ("basic_auth" = [])
+    )
+)]
 pub async fn stream_events(
     ws: WebSocketUpgrade,
     State(event_bus): State<EventBus>,

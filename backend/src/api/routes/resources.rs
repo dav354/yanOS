@@ -26,6 +26,8 @@ pub fn routes() -> Router<AppState> {
     Router::<AppState>::new()
         .route("/network/interfaces", get(list_network))
         .route("/pkg/list", get(list_packages))
+        .route("/pkg/updates", get(list_updates))
+        .route("/pkg/updates/check", post(check_updates))
         .route("/storage/dataset", post(create_dataset))
 }
 
@@ -47,6 +49,39 @@ pub async fn list_network(State(state): State<AppState>) -> Result<Json<Value>, 
     Ok(Json(value))
 }
 
+/// Trigger a manual check for package updates.
+#[utoipa::path(
+    post,
+    path = "/api/v1/pkg/updates/check",
+    tag = "resources",
+    responses(
+        (status = 202, description = "Update check started")
+    )
+)]
+#[instrument(skip(state))]
+pub async fn check_updates(State(state): State<AppState>) -> impl axum::response::IntoResponse {
+    state.pkg_actor.check_updates().await;
+    axum::http::StatusCode::ACCEPTED
+}
+
+/// List available package updates.
+#[utoipa::path(
+    get,
+    path = "/api/v1/pkg/updates",
+    tag = "resources",
+    responses(
+        (status = 200, description = "Available updates", body = [Value])
+    )
+)]
+#[instrument(skip(state))]
+pub async fn list_updates(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    let updates = state.pkg_actor.get_updates().await?;
+    let value = serde_json::to_value(&updates).map_err(|e| {
+        AppError::InternalServerError(format!("Failed to serialize updates: {e}"))
+    })?;
+    Ok(Json(value))
+}
+
 /// List installed packages (via PkgActor).
 #[utoipa::path(
     get,
@@ -54,6 +89,9 @@ pub async fn list_network(State(state): State<AppState>) -> Result<Json<Value>, 
     tag = "resources",
     responses(
         (status = 200, description = "Package list", body = [Value])
+    ),
+    security(
+        ("basic_auth" = [])
     )
 )]
 #[instrument(skip(state))]
@@ -73,6 +111,9 @@ pub async fn list_packages(State(state): State<AppState>) -> Result<Json<Value>,
     request_body = CreateDatasetRequest,
     responses(
         (status = 200, description = "Dataset created", body = CreateDatasetResponse)
+    ),
+    security(
+        ("basic_auth" = [])
     )
 )]
 #[instrument(skip(_state))]

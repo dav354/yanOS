@@ -14,6 +14,9 @@ use std::sync::Arc;
     tag = "metrics",
     responses(
         (status = 101, description = "WebSocket Upgrade")
+    ),
+    security(
+        ("basic_auth" = [])
     )
 )]
 pub async fn live_metrics(
