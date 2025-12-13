@@ -1,12 +1,17 @@
 <script>
-    import { onMount, onDestroy } from 'svelte';
+    /**
+     * MetricGraph - Real-time chart component for system metrics.
+     *
+     * Uses Chart.js to render line/area charts with live updates.
+     * Designed for 1Hz metric streams from the backend WebSocket.
+     */
+    import { onMount, onDestroy, untrack } from 'svelte';
     import Chart from 'chart.js/auto';
 
     let {
         title = "Metric",
-        data = [], // Array of objects or values
-        labels = [], // Array of time labels
-        datasets = [], // Array of dataset configs { label, data, color, fill }
+        labels,
+        datasets,
         yMin = 0,
         yMax = null,
         formatValue = (v) => v,
@@ -15,137 +20,118 @@
     } = $props();
 
     let canvas;
-    let chart;
+    let chart = null;
 
-    function initChart() {
-        if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        
-        // Common options for Proxmox-like look
-        const commonOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false, // Performance for live updates
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        boxWidth: 10,
-                        font: { size: 10 }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: (context) => {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += formatValue(context.parsed.y);
-                            }
-                            return label;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    display: true,
-                    stacked,
-                    grid: {
-                        display: true,
-                        color: '#e5e7eb'
-                    },
-                    ticks: {
-                        maxTicksLimit: 8,
-                        maxRotation: 0
-                    }
-                },
-                y: {
-                    display: true,
-                    stacked,
-                    beginAtZero: true,
-                    min: yMin,
-                    max: yMax,
-                    grid: {
-                        color: '#d1d5db'
-                    },
-                    ticks: {
-                        callback(value) {
-                            return formatValue(value);
-                        }
-                    }
-                }
-            },
-            elements: {
-                point: {
-                    radius: 0, // Hide points for clean look
-                    hitRadius: 10,
-                    hoverRadius: 4
-                },
-                line: {
-                    borderWidth: 2,
-                    tension: 0.3 // Slight curve
-                }
-            }
-        };
+    function updateChart() {
+        if (!chart) return;
 
-        chart = new Chart(ctx, {
-            type: type,
-            data: {
-                labels: labels,
-                datasets: datasets.map(ds => ({
+        // Update labels
+        chart.data.labels = [...labels];
+
+        // Sync datasets
+        while (chart.data.datasets.length > datasets.length) {
+            chart.data.datasets.pop();
+        }
+
+        datasets.forEach((ds, i) => {
+            const data = ds.data ? [...ds.data] : [];
+            if (chart.data.datasets[i]) {
+                chart.data.datasets[i].data = data;
+                chart.data.datasets[i].label = ds.label;
+                chart.data.datasets[i].borderColor = ds.color;
+                chart.data.datasets[i].backgroundColor = ds.fillColor || `${ds.color}33`;
+                chart.data.datasets[i].fill = ds.fill ?? false;
+                chart.data.datasets[i].stack = ds.stack;
+            } else {
+                chart.data.datasets.push({
                     label: ds.label,
-                    data: ds.data,
-                    borderColor: ds.color,
-                    backgroundColor: ds.fillColor || `${ds.color}33`, // add alpha
-                    fill: ds.fill ?? false,
-                    stack: ds.stack
-                }))
-            },
-            options: commonOptions
-        });
-    }
-
-    $effect(() => {
-        // Reactive update
-        if (chart) {
-            chart.data.labels = labels;
-            chart.options.scales.x.stacked = stacked;
-            chart.options.scales.y.stacked = stacked;
-            if (chart.data.datasets.length !== datasets.length) {
-                chart.data.datasets = datasets.map(ds => ({
-                    label: ds.label,
-                    data: ds.data,
+                    data: data,
                     borderColor: ds.color,
                     backgroundColor: ds.fillColor || `${ds.color}33`,
                     fill: ds.fill ?? false,
                     stack: ds.stack
-                }));
-            } else {
-                chart.data.datasets.forEach((ds, i) => {
-                    if (datasets[i]) {
-                        ds.data = datasets[i].data;
-                    }
                 });
             }
-            chart.update('none'); // 'none' mode for performance
-        }
-    });
+        });
+
+        chart.update('none');
+    }
 
     onMount(() => {
-        initChart();
+        if (!canvas) return;
+
+        chart = new Chart(canvas.getContext('2d'), {
+            type: type,
+            data: { labels: [], datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { boxWidth: 10, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                let lbl = context.dataset.label || '';
+                                if (lbl) lbl += ': ';
+                                if (context.parsed.y !== null) {
+                                    lbl += formatValue(context.parsed.y);
+                                }
+                                return lbl;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        stacked: stacked,
+                        grid: { display: true, color: '#e5e7eb' },
+                        ticks: { maxTicksLimit: 8, maxRotation: 0 }
+                    },
+                    y: {
+                        display: true,
+                        stacked: stacked,
+                        beginAtZero: true,
+                        min: yMin,
+                        max: yMax,
+                        grid: { color: '#d1d5db' },
+                        ticks: { callback(value) { return formatValue(value); } }
+                    }
+                },
+                elements: {
+                    point: { radius: 0, hitRadius: 10, hoverRadius: 4 },
+                    line: { borderWidth: 2, tension: 0.3 }
+                }
+            }
+        });
+
+        // Initial update
+        updateChart();
     });
 
     onDestroy(() => {
-        if (chart) chart.destroy();
+        if (chart) {
+            chart.destroy();
+            chart = null;
+        }
+    });
+
+    // Watch for prop changes - Svelte 5 tracks these as the component re-renders
+    $effect.pre(() => {
+        // Read the reactive values to establish tracking
+        const _labels = labels;
+        const _datasets = datasets;
+        const _labelsLen = labels?.length ?? 0;
+        const _ds0Len = datasets?.[0]?.data?.length ?? 0;
+
+        // Update chart with new data
+        untrack(() => updateChart());
     });
 </script>
 

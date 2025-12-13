@@ -1,11 +1,25 @@
 <script>
+    /**
+     * Dashboard page - main system overview with real-time metrics.
+     *
+     * Connects to /api/v1/metrics/live WebSocket for live system stats.
+     * Displays:
+     * - System info (hostname, kernel, uptime)
+     * - Summary cards (CPU, Memory, ARC, Network)
+     * - Time-series charts for CPU, Memory, and Network
+     * - Per-core CPU breakdown
+     *
+     * Auto-reconnects on WebSocket disconnect with exponential backoff.
+     */
     import { auth } from '$lib/auth.svelte.js';
     import MetricGraph from '$lib/components/MetricGraph.svelte';
 
+    // --- State ---
     let systemInfo = $state(null);
     let metricsSocket = null;
 
-    const maxPoints = 180; // keep ~3 minutes at 1Hz
+    // Rolling buffer size: ~3 minutes of 1Hz samples
+    const maxPoints = 180;
     let labels = $state([]);
 
     let cpuData = $state([]);
@@ -14,6 +28,13 @@
     let ramFree = $state([]);
     let netRx = $state([]);
     let netTx = $state([]);
+    let perCore = $state([]);
+
+    // Update Logic
+    let isConnected = $state(false);
+    let reconnectAttempts = $state(0);
+    let reconnectTimeout = $state(null);
+    const MAX_RECONNECT_DELAY = 30000;
 
     let latestCpu = $derived(cpuData.at(-1) ?? 0);
     let latestRam = $derived(ramUsed.at(-1) ?? 0);
@@ -47,48 +68,60 @@
         return `${val.toFixed(1)}%`;
     }
 
+    /**
+     * Apply a single metric point to the rolling data buffers.
+     * Uses immutable updates to trigger Svelte 5 reactivity.
+     */
     function applyMetric(metric) {
         const now = new Date(metric.ts ?? Date.now());
         const timeLabel = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
-        labels.push(timeLabel);
-        if (labels.length > maxPoints) labels.shift();
-
+        // CPU data
         const cpuVal = Number(metric.cpu_user ?? 0) + Number(metric.cpu_system ?? 0);
-        cpuData.push(cpuVal);
-        if (cpuData.length > maxPoints) cpuData.shift();
 
+        // Memory data
         const total = Number(metric.memory_total ?? 0);
         const arc = Math.max(0, Number(metric.zfs_arc ?? 0));
         const usedRaw = Math.max(0, Number(metric.memory_used ?? 0));
         const usedWithoutArc = Math.max(0, usedRaw - arc);
         const free = Math.max(0, total - usedRaw);
 
-        ramUsed.push(usedWithoutArc);
-        ramArc.push(arc);
-        ramFree.push(free);
-        if (ramUsed.length > maxPoints) {
-            ramUsed.shift();
-            ramArc.shift();
-            ramFree.shift();
-        }
+        // Network data
+        const rx = Math.max(0, Number(metric.rx_bytes ?? 0));
+        const tx = Math.max(0, Number(metric.tx_bytes ?? 0));
 
-        netRx.push(Math.max(0, Number(metric.rx_bytes ?? 0)));
-        netTx.push(Math.max(0, Number(metric.tx_bytes ?? 0)));
-        if (netRx.length > maxPoints) {
-            netRx.shift();
-            netTx.shift();
-        }
+        // Per-core data
+        perCore = Array.isArray(metric.per_core) ? [...metric.per_core] : [];
+
+        // Immutable array updates for Svelte 5 reactivity
+        // Slice from index 1 if over limit to drop oldest, then add new value
+        const slice = (arr, val) => {
+            const newArr = arr.length >= maxPoints ? arr.slice(1) : [...arr];
+            newArr.push(val);
+            return newArr;
+        };
+
+        labels = slice(labels, timeLabel);
+        cpuData = slice(cpuData, cpuVal);
+        ramUsed = slice(ramUsed, usedWithoutArc);
+        ramArc = slice(ramArc, arc);
+        ramFree = slice(ramFree, free);
+        netRx = slice(netRx, rx);
+        netTx = slice(netTx, tx);
     }
 
-    function triggerUpdate() {
-        labels = [...labels];
-        cpuData = [...cpuData];
-        ramUsed = [...ramUsed];
-        ramArc = [...ramArc];
-        ramFree = [...ramFree];
-        netRx = [...netRx];
-        netTx = [...netTx];
+    function scheduleReconnect() {
+        if (reconnectTimeout) return;
+
+        // Exponential backoff: 1s, 2s, 4s, 8s... up to MAX_RECONNECT_DELAY
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+        console.log(`Scheduling WebSocket reconnect in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+
+        reconnectTimeout = setTimeout(() => {
+            reconnectTimeout = null;
+            reconnectAttempts++;
+            connectMetrics();
+        }, delay);
     }
 
     function connectMetrics() {
@@ -97,45 +130,39 @@
                 metricsSocket.close();
                 metricsSocket = null;
             }
+            isConnected = false;
             return;
         }
-        
+
         if (metricsSocket && metricsSocket.readyState <= 1) return;
 
         const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
         const ws = new WebSocket(`${protocol}://${location.host}/api/v1/metrics/live`);
         metricsSocket = ws;
-        
+
         ws.onopen = () => {
             console.log('Metrics WebSocket connected');
+            isConnected = true;
+            reconnectAttempts = 0; // Reset on successful connection
         };
 
         ws.onerror = (e) => {
             console.error('Metrics WebSocket error', e);
+            isConnected = false;
         };
 
-        let batchTimer = null;
-        
         ws.onmessage = (evt) => {
-            // console.debug('Metrics received', evt.data.length);
             try {
                 const parsed = JSON.parse(evt.data);
 
                 if (Array.isArray(parsed)) {
-                    console.log('Received history batch', parsed.length);
+                    // Initial batch - apply each metric (triggers reactivity)
                     parsed.forEach(applyMetric);
-                    triggerUpdate();
                     return;
                 }
 
+                // Single metric update
                 applyMetric(parsed);
-
-                if (!batchTimer) {
-                    batchTimer = setTimeout(() => {
-                        triggerUpdate();
-                        batchTimer = null;
-                    }, 60);
-                }
             } catch (e) {
                 console.error('Failed to parse metrics', e);
             }
@@ -143,6 +170,12 @@
         ws.onclose = (e) => {
             console.log('Metrics WebSocket closed', e.code, e.reason);
             metricsSocket = null;
+            isConnected = false;
+
+            // Auto-reconnect if still authenticated
+            if (auth.isAuthenticated) {
+                scheduleReconnect();
+            }
         };
     }
 
@@ -152,6 +185,10 @@
             connectMetrics();
         }
         return () => {
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
             if (metricsSocket) {
                 metricsSocket.close();
                 metricsSocket = null;
@@ -166,7 +203,6 @@
             <p class="text-sm text-text-muted">Systems Overview</p>
             <h1 class="text-3xl font-bold text-text-main">Dashboard</h1>
         </div>
-        <div class="text-xs text-text-muted">Live 1s interval</div>
     </div>
 
     {#if systemInfo}
@@ -251,5 +287,24 @@
             <span class="text-lg font-bold text-text-main mb-2">Storage / IOPS</span>
             <span class="text-sm">Hook metrics actor once ZFS polling lands.</span>
         </div>
+    </div>
+
+    <div class="bg-bg-card border border-border-main rounded-lg p-4 shadow">
+        <p class="text-xs uppercase tracking-wide text-text-muted">Per-core CPU</p>
+        {#if perCore.length}
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+                {#each perCore as core (core.id)}
+                    <div class="border border-border-main rounded p-2 flex flex-col gap-1">
+                        <span class="text-xs text-text-muted">CPU{core.id}</span>
+                        <span class="text-lg font-semibold text-text-main">
+                            {formatPercent(Number(core.cpu_user ?? 0) + Number(core.cpu_system ?? 0))}
+                        </span>
+                        <span class="text-xs text-text-muted">Idle {formatPercent(Number(core.cpu_idle ?? 0))}</span>
+                    </div>
+                {/each}
+            </div>
+        {:else}
+            <p class="text-sm text-text-muted mt-2">Waiting for samples...</p>
+        {/if}
     </div>
 </div>
