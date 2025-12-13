@@ -20,7 +20,7 @@ pub fn start_system_log_watcher(
         let file = match File::open(&path) {
             Ok(f) => f,
             Err(e) => {
-                error!(target: "zos::logs", error = ?e, path = ?path, "Failed to open system log file");
+                error!(target: "yanos::logs", error = ?e, path = ?path, "Failed to open system log file");
                 return;
             }
         };
@@ -45,7 +45,7 @@ pub fn start_system_log_watcher(
                     }
                 }
                 Err(e) => {
-                    error!(target: "zos::logs", error = ?e, path = ?path, "Error preloading log file");
+                    error!(target: "yanos::logs", error = ?e, path = ?path, "Error preloading log file");
                     break;
                 }
             }
@@ -56,7 +56,7 @@ pub fn start_system_log_watcher(
         }
 
         if let Err(e) = reader.get_mut().seek(SeekFrom::End(0)) {
-            error!(target: "zos::logs", error = ?e, path = ?path, "Failed to seek to end of log file");
+            error!(target: "yanos::logs", error = ?e, path = ?path, "Failed to seek to end of log file");
         }
 
         let mut buf = String::new();
@@ -74,13 +74,13 @@ pub fn start_system_log_watcher(
                     bus.publish(ExternalEvent::SystemLog { line: line.clone() });
                 }
                 Err(e) => {
-                    error!(target: "zos::logs", error = ?e, path = ?path, "Error reading log file");
+                    error!(target: "yanos::logs", error = ?e, path = ?path, "Error reading log file");
                     std::thread::sleep(sleep);
                 }
             }
         }
     });
 
-    info!(target: "zos::logs", path = ?log_path, "System log watcher started");
+    info!(target: "yanos::logs", path = ?log_path, "System log watcher started");
     Ok(handle)
 }

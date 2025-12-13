@@ -24,7 +24,7 @@
 {#if !auth.isInitialized}
     <!-- Loading Screen -->
     <div class="flex h-screen w-screen items-center justify-center bg-gray-100">
-        <div class="text-gray-500">Loading zOS...</div>
+        <div class="text-gray-500">Loading yanOS...</div>
     </div>
 {:else if $page.url.pathname === '/login'}
     {@render children?.()}

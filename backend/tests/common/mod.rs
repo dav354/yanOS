@@ -7,7 +7,7 @@ use tower_sessions_core::session::{Id, Record};
 use tower_sessions_core::session_store;
 
 use serde_json::Value;
-use zos_backend::{actors, api, auth, events::EventBus, tls};
+use yanos_backend::{actors, api, auth, events::EventBus, tls};
 
 /// Build a test app with temporary session key and TLS material.
 pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {

@@ -101,14 +101,22 @@ pub async fn login_handler(
 ) -> Result<Json<&'static str>, AppError> {
     info!(username = %payload.username, "Attempting to authenticate user");
 
-    let username = payload.username.clone();
-    let password = payload.password.clone();
+    authenticate(payload.username.clone(), payload.password.clone()).await?;
 
-    // The PAM authentication needs to be run in a blocking thread
-    // to avoid blocking the async runtime.
+    // Store username in the session.
+    session
+        .insert("username", &payload.username)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to insert into session: {}", e)))?;
+
+    Ok(Json("Authentication successful"))
+}
+
+/// Authenticates a user against the configured PAM stack.
+pub async fn authenticate(username: String, password: String) -> Result<(), AppError> {
     let result = tokio::task::spawn_blocking(move || {
-        // Default to the dedicated "zos" PAM stack so we can avoid TTY-dependent modules.
-        let service_name = std::env::var("PAM_SERVICE_NAME").unwrap_or_else(|_| "zos".to_string());
+        // Default to the dedicated "yanos" PAM stack so we can avoid TTY-dependent modules.
+        let service_name = std::env::var("PAM_SERVICE_NAME").unwrap_or_else(|_| "yanos".to_string());
 
         let c_service =
             CString::new(service_name.clone()).map_err(|_| "Invalid PAM service name")?;
@@ -175,18 +183,11 @@ pub async fn login_handler(
 
     match result {
         Ok(_) => {
-            info!(username = %payload.username, "User authenticated successfully");
-            // Store username in the session.
-            session
-                .insert("username", &payload.username)
-                .await
-                .map_err(|e| {
-                    AppError::InternalServerError(format!("Failed to insert into session: {}", e))
-                })?;
-            Ok(Json("Authentication successful"))
+            info!("User authenticated via PAM");
+            Ok(())
         }
         Err(e) => {
-            error!(username = %payload.username, "Authentication failed: {}", e);
+            error!("PAM authentication failed: {}", e);
             Err(AppError::Unauthorized("Invalid credentials".to_string()))
         }
     }

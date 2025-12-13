@@ -1,6 +1,6 @@
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
-use zos_backend::actors::MetricsActor;
+use yanos_backend::actors::MetricsActor;
 
 #[tokio::test]
 async fn test_metrics_collection_and_broadcast() {

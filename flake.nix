@@ -1,5 +1,5 @@
 {
-  description = "Development environment for zOS";
+  description = "Development environment for yanOS";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

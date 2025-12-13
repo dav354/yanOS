@@ -14,7 +14,7 @@ use tracing::{error, info};
 
 use crate::tls::generate::ensure_tls_certs_exist;
 
-pub const DEFAULT_TLS_DIR: &str = "/etc/opt/zos/tls";
+pub const DEFAULT_TLS_DIR: &str = "/etc/opt/yanos/tls";
 
 fn mtimes(cert_path: &Path, key_path: &Path) -> io::Result<(SystemTime, SystemTime)> {
     let cert_meta = fs::metadata(cert_path)?;
@@ -76,18 +76,18 @@ impl TlsState {
                                 Ok(_) => {
                                     reload_status.store(true, Ordering::SeqCst);
                                     previous_mtimes = Some(current);
-                                    info!(target: "zos::tls", "Reloaded TLS certificate and key");
+                                    info!(target: "yanos::tls", "Reloaded TLS certificate and key");
                                 }
                                 Err(err) => {
                                     reload_status.store(false, Ordering::SeqCst);
-                                    error!(target: "zos::tls", error = ?err, "Failed to reload TLS material");
+                                    error!(target: "yanos::tls", error = ?err, "Failed to reload TLS material");
                                 }
                             }
                         }
                     }
                     Err(err) => {
                         reload_status.store(false, Ordering::SeqCst);
-                        error!(target: "zos::tls", error = ?err, "Failed to read TLS metadata");
+                        error!(target: "yanos::tls", error = ?err, "Failed to read TLS metadata");
                     }
                 }
             }

@@ -5,7 +5,7 @@ use axum::http::{Request, StatusCode};
 use hyper::Method;
 use tower::ServiceExt;
 
-use zos_backend::auth;
+use yanos_backend::auth;
 
 #[tokio::test]
 async fn test_unauthenticated_api_access() {

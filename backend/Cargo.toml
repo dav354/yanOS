@@ -1,5 +1,5 @@
 [package]
-name = "zos-backend"
+name = "yanos-backend"
 version = "0.0.1"
 edition = "2024"
 
@@ -25,6 +25,7 @@ opentelemetry-otlp = { version = "0.31.0", features = ["trace", "grpc-tonic", "m
 # For PAM authentication
 pam-sys = "1.0.0-alpha5"
 libc = "0.2"
+base64 = "0.22"
 
 # For TLS
 rcgen = "0.14.5"
@@ -46,6 +47,7 @@ chrono = "0.4.42"
 futures = "0.3.31"
 portable-pty = "0.9"
 tokio-util = { version = "0.7", features = ["codec"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 
 [dev-dependencies]
 http-body-util = "0.1"

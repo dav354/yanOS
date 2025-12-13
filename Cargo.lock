@@ -2910,6 +2910,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
+dependencies = [
+ "getrandom 0.3.4",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3368,6 +3379,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
 
 [[package]]
+name = "yanos-backend"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "axum-server",
+ "axum_csrf",
+ "base64",
+ "chrono",
+ "futures",
+ "http-body-util",
+ "hyper",
+ "libc",
+ "notify",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pam-sys",
+ "portable-pty",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rcgen",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-cookies",
+ "tower-http 0.5.2",
+ "tower-sessions",
+ "tower-sessions-core",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "usdt",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+]
+
+[[package]]
 name = "yasna"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3509,46 +3564,4 @@ dependencies = [
  "crc32fast",
  "log",
  "simd-adler32",
-]
-
-[[package]]
-name = "zos-backend"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "axum",
- "axum-server",
- "axum_csrf",
- "chrono",
- "futures",
- "http-body-util",
- "hyper",
- "libc",
- "notify",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "pam-sys",
- "portable-pty",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "rcgen",
- "serde",
- "serde_json",
- "sysinfo",
- "tempfile",
- "time",
- "tokio",
- "tokio-util",
- "tower",
- "tower-cookies",
- "tower-http 0.5.2",
- "tower-sessions",
- "tower-sessions-core",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "usdt",
- "utoipa",
- "utoipa-swagger-ui",
 ]

@@ -1,14 +1,15 @@
-# Modern Storage OS
+# yanOS
 
-## 1. Vision & Core Philosophy
+Yet another NAS Os
 
-We are building a **Storage Appliance**, not just a "tool". The user downloads an ISO, installs it on bare metal, and controls everything through a web interface.
+## 1. Vision & Philosophy
 
-**Core Principles:**
+yanOS is a storage-first appliance for OmniOS—leaner than TrueNAS/OMV/Unraid because it avoids Docker/VM sprawl and keeps config in system files.
 
-*   **System Files = Single Source of Truth:** We use `/etc/` and ZFS Properties. No parallel database.
-*   **Production Ready:** Focus on Observability (OTel/DTrace), updates, and security.
-*   **Modern DX:** API-First with auto-documentation (OpenAPI) and a Svelte 5 Frontend.
+*   **KISS:** No container zoo; only storage and core services.
+*   **Single Source of Truth:** `/etc/` + ZFS properties, never a shadow database.
+*   **Production Ready:** Observability (OTel/DTrace), safe updates, strong defaults.
+*   **Modern DX:** API-first with generated docs (OpenAPI/utoipa) and a Svelte 5 UI.
 
 ## 2. Technology Stack
 
@@ -20,9 +21,4 @@ We are building a **Storage Appliance**, not just a "tool". The user downloads a
     *   **Tracing:** `tracing-opentelemetry` + `usdt` (DTrace)
 *   **Frontend:** Svelte 5 (Runes) + Tailwind CSS.
     *   **Web Shell:** Integration of `ttyd` via WebSocket proxy directly in the dashboard.
-*   **Build System:** `just` (as a modern Make replacement).
-
-## 3. Service Management
-
-*   **Service User:** `webservd` (least privilege for the Axum binary).
-*   **SMF Manifest:** `backend/smf/zos-backend.xml` imports the service under `site/storage-os`.
+*   **Build System:** `just`.

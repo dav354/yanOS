@@ -65,7 +65,7 @@ pub fn start_network_actor() -> NetworkActorHandle {
                     resp,
                 } => {
                     info!(
-                        target: "zos::network_actor",
+                        target: "yanos::network_actor",
                         %interface,
                         %address,
                         "SetAddress requested (not implemented)"

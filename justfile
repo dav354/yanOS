@@ -1,6 +1,6 @@
 # Config
 vmConnection := "root@192.168.122.143"
-remoteDir := "/opt/zos"
+remoteDir := "/opt/yanos"
 
 # Derived paths (Must be defined at top level for 'just')
 backendDir := remoteDir + "/backend"

@@ -22,12 +22,12 @@ pub async fn start_filesystem_watcher(
                 let target = event.paths.get(0).cloned();
                 if let Some(p) = target {
                     bus.publish(ExternalEvent::ConfigChanged { path: p.clone() });
-                    info!(target: "zos::watcher", path = ?p, "External config change detected");
+                    info!(target: "yanos::watcher", path = ?p, "External config change detected");
                 }
             }
         }
         Err(err) => {
-            error!(target: "zos::watcher", error = ?err, "Watcher error");
+            error!(target: "yanos::watcher", error = ?err, "Watcher error");
         }
     })?;
 

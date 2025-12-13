@@ -51,7 +51,7 @@
 
 <aside class="w-64 bg-bg-sidebar text-text-sidebar flex flex-col h-full border-r border-border-main">
     <div class="p-4 border-b border-border-main bg-bg-sidebar">
-        <h1 class="text-xl font-bold tracking-wider">zOS <span class="text-xs text-text-sidebar-muted font-normal">v0.1</span></h1>
+        <h1 class="text-xl font-bold tracking-wider">yanOS <span class="text-xs text-text-sidebar-muted font-normal">v0.1</span></h1>
     </div>
     
     <nav class="flex-1 overflow-y-auto py-4">

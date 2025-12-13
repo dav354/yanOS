@@ -14,7 +14,7 @@ use tower_sessions_core::{
 
 use crate::error::AppError;
 
-pub const DEFAULT_SESSION_KEY_PATH: &str = "/etc/opt/zos/session.key";
+pub const DEFAULT_SESSION_KEY_PATH: &str = "/etc/opt/yanos/session.key";
 
 /// Dynamic session store wrapper so we can swap storage backends without
 /// touching handler code.

@@ -5,7 +5,7 @@ use axum::http::{Request, StatusCode};
 use hyper::Method;
 use tower::ServiceExt;
 
-use zos_backend::{api, auth};
+use yanos_backend::{api, auth};
 
 #[tokio::test]
 async fn test_healthz_returns_ok() {

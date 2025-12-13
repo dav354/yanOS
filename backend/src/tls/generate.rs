@@ -25,8 +25,8 @@ pub fn ensure_tls_certs_exist(cert_dir: &Path) -> io::Result<()> {
     let subject_alt_names = vec![
         "localhost".to_string(),
         "127.0.0.1".to_string(),
-        "zos".to_string(),
-        "zos.local".to_string(),
+        "yanos".to_string(),
+        "yanos.local".to_string(),
     ];
     let certified_key = generate_simple_self_signed(subject_alt_names).map_err(|err| {
         io::Error::new(

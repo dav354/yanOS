@@ -1,6 +1,6 @@
 mod common;
 
-use zos_backend::{auth, tls};
+use yanos_backend::{auth, tls};
 
 #[tokio::test]
 async fn test_session_store_healthcheck_passes_for_memory_store() {
