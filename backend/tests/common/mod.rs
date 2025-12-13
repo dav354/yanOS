@@ -28,7 +28,7 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
     let event_bus = EventBus::new(8);
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor();
-    let metrics_state = actors::start_metrics_actor();
+    let metrics_state = actors::start_metrics_actor().expect("Failed to start metrics actor");
 
     let app_state = api::AppState::new(
         csrf_config.clone(),

@@ -9,7 +9,8 @@ async fn test_metrics_collection_and_broadcast() {
     let (broadcast_tx, mut broadcast_rx) = broadcast::channel(10);
 
     // Start Actor
-    let actor = MetricsActor::new(_cmd_rx, broadcast_tx);
+    let actor = MetricsActor::new(_cmd_rx, broadcast_tx)
+        .expect("Failed to construct MetricsActor");
     tokio::spawn(actor.run());
 
     // Wait for at least one tick (Actor ticks every 1s)
@@ -25,6 +26,14 @@ async fn test_metrics_collection_and_broadcast() {
             // CPU usage could be 0, but it should be a valid float
             assert!(point.cpu_user >= 0.0);
             assert!(point.cpu_idle >= 0.0);
+            assert!(
+                !point.per_core.is_empty(),
+                "per-core CPU metrics should be present"
+            );
+            assert!(
+                point.per_core.iter().all(|c| c.cpu_user >= 0.0 && c.cpu_system >= 0.0),
+                "per-core CPU percentages should be non-negative"
+            );
 
             println!("Received metric: {:?}", point);
         }
