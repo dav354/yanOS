@@ -1,3 +1,18 @@
+//! Terminal actor for web-based shell sessions.
+//!
+//! This module provides a PTY-based terminal session that can be accessed
+//! over WebSocket. Each session spawns a login shell for the authenticated
+//! user via `su -` to ensure proper environment initialization.
+//!
+//! # Architecture
+//! - `TerminalActorHandle` - async handle for sending commands to the session
+//! - `TerminalSession` - contains the handle and output receiver
+//! - PTY I/O runs on a blocking thread, bridged to async via channels
+//!
+//! # Security
+//! The user must already be authenticated via PAM before a terminal session
+//! is created. Authentication is checked in the WebSocket handler, not here.
+
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -8,13 +23,19 @@ use tracing::{error, info, instrument};
 
 use crate::error::AppError;
 
+/// Messages sent to the terminal actor.
 #[derive(Debug)]
 pub enum TerminalMessage {
+    /// User input data (keystrokes) to write to the PTY
     Input(String),
+    /// Resize the PTY to match the client's terminal dimensions
     Resize { rows: u16, cols: u16 },
+    /// Gracefully terminate the session
     Shutdown,
 }
 
+/// Handle for communicating with a terminal session.
+/// Clone-able to allow multiple references (e.g., input and resize handlers).
 #[derive(Clone, Debug)]
 pub struct TerminalActorHandle {
     tx: mpsc::Sender<TerminalMessage>,
@@ -52,23 +73,17 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
 
     let pty_system = NativePtySystem::default();
 
-    let build_login = || {
-        let mut cmd = CommandBuilder::new("/usr/bin/login");
-        cmd.arg("-f");
+    // Build shell command for the authenticated user.
+    // SECURITY NOTE: The user has already been authenticated via PAM in the WebSocket
+    // handshake (ws_handler checks session). We spawn a login shell as that user.
+    // On illumos, `login -f` requires console access, so we use `su -` instead
+    // which respects PAM and properly initializes the user environment.
+    let build_su_shell = || {
+        let mut cmd = CommandBuilder::new("/usr/bin/su");
+        cmd.arg("-"); // Login shell
         cmd.arg(&username);
         cmd.env("TERM", "xterm-256color");
         cmd.env("LANG", "en_US.UTF-8");
-        cmd
-    };
-
-    let build_shell = || {
-        let mut cmd = CommandBuilder::new("/usr/bin/bash");
-        cmd.arg("-l");
-        cmd.env("TERM", "xterm-256color");
-        cmd.env("LANG", "en_US.UTF-8");
-        cmd.env("USER", &username);
-        cmd.env("LOGNAME", &username);
-        cmd.env("PS1", r"\u@\h \w $ ");
         cmd
     };
 
@@ -81,23 +96,12 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
         })
         .map_err(|e| AppError::InternalServerError(format!("openpty failed: {e}")))?;
 
-    let mut child = if username != "root" {
-        match pair.slave.spawn_command(build_login()) {
-            Ok(child) => child,
-            Err(e) => {
-                // Fall back to shell if login -f is not permitted (e.g., not console or not root)
-                info!(target: "yanos::terminal_actor", error=?e, "login -f failed, falling back to shell");
-                pair.slave.spawn_command(build_shell()).map_err(|e| {
-                    AppError::InternalServerError(format!("spawn shell failed: {e}"))
-                })?
-            }
-        }
-    } else {
-        // root is often blocked via login -f outside console; go straight to shell
-        pair.slave
-            .spawn_command(build_shell())
-            .map_err(|e| AppError::InternalServerError(format!("spawn shell failed: {e}")))?
-    };
+    // Spawn shell via su which handles user switching properly on illumos.
+    // The web service must run as root (or have appropriate privileges) for this to work.
+    let mut child = pair
+        .slave
+        .spawn_command(build_su_shell())
+        .map_err(|e| AppError::InternalServerError(format!("Failed to spawn shell for user '{}': {e}", username)))?;
 
     drop(pair.slave);
 
