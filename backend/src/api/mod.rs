@@ -41,7 +41,7 @@ pub use state::AppState;
     ),
     modifiers(&SecurityAddon),
     tags(
-        (name = "zos", description = "zOS Management API")
+        (name = "yanos", description = "yanOS Management API")
     )
 )]
 struct ApiDoc;

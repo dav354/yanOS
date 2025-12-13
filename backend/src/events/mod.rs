@@ -4,12 +4,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use time::OffsetDateTime;
 use tokio::sync::broadcast;
+use utoipa::ToSchema;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExternalEvent {
     // Config Changes
-    ConfigChanged { path: PathBuf },
+    ConfigChanged {
+        #[schema(value_type = String)]
+        path: PathBuf,
+    },
 
     // Service Events
     ServiceStarted { fmri: String },
@@ -26,6 +30,20 @@ pub enum ExternalEvent {
 
     // System logs (e.g., /var/adm/messages lines)
     SystemLog { line: String },
+
+    // Task Events
+    TaskStarted {
+        id: String,
+        name: String,
+        started_at: String,
+    },
+    TaskCompleted {
+        id: String,
+        name: String,
+        started_at: String,
+        duration_ms: u64,
+        status: String,
+    },
 }
 
 /// A simple broadcast bus for streaming external change events to subscribers.
@@ -98,6 +116,7 @@ impl EventBus {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(ToSchema)]
 pub struct LoggedEvent {
     pub ts: String,
     pub event: ExternalEvent,
