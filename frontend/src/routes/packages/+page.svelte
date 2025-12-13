@@ -45,8 +45,9 @@
                 <table class="min-w-full divide-y divide-border-main">
                     <thead class="bg-bg-main">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">FMRI / Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Name</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Version</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Build Time</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Status</th>
                         </tr>
                     </thead>
@@ -58,6 +59,9 @@
                                 </td>
                                 <td class="px-6 py-2 whitespace-nowrap text-sm text-text-muted font-mono">
                                     {pkg.version}
+                                </td>
+                                <td class="px-6 py-2 whitespace-nowrap text-sm text-text-muted font-mono">
+                                    {pkg.build_time}
                                 </td>
                                 <td class="px-6 py-2 whitespace-nowrap text-sm text-text-muted">
                                     {pkg.status}
