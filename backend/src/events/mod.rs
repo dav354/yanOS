@@ -1,3 +1,17 @@
+//! Event bus for system-wide notifications.
+//!
+//! This module provides a broadcast-based event system for streaming
+//! external changes to WebSocket clients. Events include:
+//! - Configuration file changes (via notify watchers)
+//! - SMF service state changes
+//! - ZFS dataset operations
+//! - Network link state changes
+//! - System log entries
+//! - Background task progress
+//!
+//! Events are timestamped and kept in a rolling history buffer for
+//! new clients to receive recent events on connection.
+
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -6,37 +20,50 @@ use time::OffsetDateTime;
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
 
+/// External events that can be broadcast to UI clients.
+/// Tagged enum serializes with a "type" field for easy client-side dispatch.
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExternalEvent {
-    // Config Changes
+    // --- Configuration Changes ---
+    /// A watched config file was modified externally
     ConfigChanged {
         #[schema(value_type = String)]
         path: PathBuf,
     },
 
-    // Service Events
+    // --- SMF Service Events ---
+    /// An SMF service transitioned to online state
     ServiceStarted { fmri: String },
+    /// An SMF service transitioned to offline/disabled state
     ServiceStopped { fmri: String },
+    /// An SMF service entered maintenance state
     ServiceFailed { fmri: String },
 
-    // ZFS Events
+    // --- ZFS Events ---
+    /// A new ZFS dataset was created
     DatasetCreated { name: String },
+    /// A ZFS dataset was destroyed
     DatasetDestroyed { name: String },
 
-    // Network
+    // --- Network Events ---
+    /// A network link came up
     LinkUp { name: String },
+    /// A network link went down
     LinkDown { name: String },
 
-    // System logs (e.g., /var/adm/messages lines)
+    // --- System Logging ---
+    /// A new line from /var/adm/messages or similar system log
     SystemLog { line: String },
 
-    // Task Events
+    // --- Background Task Events ---
+    /// A long-running task started (e.g., package update check)
     TaskStarted {
         id: String,
         name: String,
         started_at: String,
     },
+    /// A background task completed (success or failure)
     TaskCompleted {
         id: String,
         name: String,

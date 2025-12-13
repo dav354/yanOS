@@ -1,23 +1,44 @@
+//! TLS certificate management with automatic reload.
+//!
+//! This module handles TLS configuration for the HTTPS server:
+//! - Loads certificates from disk (or generates self-signed on first run)
+//! - Monitors certificate files for changes every 30 seconds
+//! - Hot-reloads certificates without server restart
+//!
+//! # Certificate Location
+//! By default, certificates are stored in `/etc/opt/yanos/tls/`:
+//! - `cert.pem` - PEM-encoded certificate chain
+//! - `key.pem` - PEM-encoded private key
+//!
+//! # ALPN Configuration
+//! Forces HTTP/1.1 ALPN to ensure WebSocket upgrades work correctly
+//! (HTTP/2 doesn't support WebSocket in the same way).
+
 use std::{
     fs, io,
     path::{Path, PathBuf},
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     time::SystemTime,
 };
 
 use axum_server::tls_rustls::RustlsConfig;
-use rustls::{ServerConfig, pki_types::{CertificateDer, PrivateKeyDer}};
+use rustls::{
+    pki_types::{CertificateDer, PrivateKeyDer},
+    ServerConfig,
+};
 use rustls_pki_types::pem::PemObject;
 use tokio::time::{self, Duration as TokioDuration};
 use tracing::{error, info};
 
 use crate::tls::generate::ensure_tls_certs_exist;
 
+/// Default directory for TLS certificates
 pub const DEFAULT_TLS_DIR: &str = "/etc/opt/yanos/tls";
 
+/// Get modification times for cert and key files (used for change detection).
 fn mtimes(cert_path: &Path, key_path: &Path) -> io::Result<(SystemTime, SystemTime)> {
     let cert_meta = fs::metadata(cert_path)?;
     let key_meta = fs::metadata(key_path)?;
@@ -26,7 +47,11 @@ fn mtimes(cert_path: &Path, key_path: &Path) -> io::Result<(SystemTime, SystemTi
     Ok((cert_mtime, key_mtime))
 }
 
-/// Tracks TLS config and reloads it when files change.
+/// TLS state manager with automatic certificate reload.
+///
+/// Holds the RustlsConfig and spawns a background task to poll for
+/// certificate file changes. When changes are detected, reloads the
+/// certificate/key pair without requiring a server restart.
 #[derive(Clone, Debug)]
 pub struct TlsState {
     cert_path: PathBuf,

@@ -1,26 +1,59 @@
+//! Metrics collection actor for system monitoring.
+//!
+//! This actor runs a background task that collects system metrics at 1Hz:
+//! - CPU utilization (aggregate and per-core) via kstat cpu:*:sys
+//! - Memory usage via kstat unix:0:system_pages
+//! - ZFS ARC size via kstat zfs:0:arcstats
+//! - Network throughput via kstat link statistics
+//!
+//! Metrics are broadcast to WebSocket subscribers and kept in a rolling history
+//! buffer for new clients to receive recent data on connection.
+
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, Networks, RefreshKind, System};
-use tokio::sync::{RwLock, broadcast, mpsc};
-use tokio::time::{Duration, interval};
+use std::time::{Duration, Instant};
+use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::time::interval;
 use tracing::{info, warn};
 
 use crate::adapters;
+use crate::error::AppError;
 
 // --- Data Structures ---
 
+/// A single point-in-time system metrics snapshot.
+/// Sent to WebSocket clients as JSON at 1Hz intervals.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricPoint {
-    pub ts: i64,           // Timestamp (Unix ms)
-    pub cpu_user: f32,     // CPU User %
-    pub cpu_system: f32,   // CPU System % (Kernel)
-    pub cpu_idle: f32,     // CPU Idle %
-    pub memory_used: u64,  // RAM Used (Bytes)
-    pub memory_total: u64, // RAM Total (Bytes)
-    pub zfs_arc: u64,      // ZFS ARC Size (Bytes) - approximated or parsed
-    pub rx_bytes: u64,     // Network RX (Bytes/sec)
-    pub tx_bytes: u64,     // Network TX (Bytes/sec)
+    /// Timestamp in Unix milliseconds
+    pub ts: i64,
+    /// CPU user time percentage (0-100)
+    pub cpu_user: f32,
+    /// CPU kernel/system time percentage (0-100)
+    pub cpu_system: f32,
+    /// CPU idle time percentage (0-100)
+    pub cpu_idle: f32,
+    /// Per-core CPU breakdown for detailed monitoring
+    pub per_core: Vec<CpuCoreMetric>,
+    /// Physical memory in use (bytes), includes ARC
+    pub memory_used: u64,
+    /// Total physical memory (bytes)
+    pub memory_total: u64,
+    /// ZFS ARC cache size (bytes) - reclaimable memory
+    pub zfs_arc: u64,
+    /// Network receive rate (bytes/second)
+    pub rx_bytes: u64,
+    /// Network transmit rate (bytes/second)
+    pub tx_bytes: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CpuCoreMetric {
+    pub id: i32,
+    pub cpu_user: f32,
+    pub cpu_system: f32,
+    pub cpu_idle: f32,
 }
 
 #[derive(Debug)]
@@ -37,47 +70,56 @@ pub struct MetricsState {
 
 // --- Actor ---
 
+#[derive(Clone, Copy)]
+struct CpuCounters {
+    idle: u64,
+    user: u64,
+    kernel: u64,
+}
+
 pub struct MetricsActor {
     receiver: mpsc::Receiver<MetricsCommand>,
     broadcast_tx: broadcast::Sender<MetricPoint>,
-    pub history: Arc<RwLock<VecDeque<MetricPoint>>>, // Shared history for new clients
-    system: System,
-    networks: Networks,
+    pub history: Arc<RwLock<VecDeque<MetricPoint>>>,
     max_history: usize,
+    
+    // State for rate calculations
+    prev_cpu: HashMap<i32, CpuCounters>,
+    prev_net_rx: Option<u64>,
+    prev_net_tx: Option<u64>,
+    last_update: Instant,
+    page_size: u64,
     arc_warned: bool,
+    kstat: adapters::kstat::KstatReader,
 }
 
 impl MetricsActor {
     pub fn new(
         receiver: mpsc::Receiver<MetricsCommand>,
         broadcast_tx: broadcast::Sender<MetricPoint>,
-    ) -> Self {
-        // Init sysinfo with specific refresh requirements
-        let mut system = System::new_with_specifics(
-            RefreshKind::nothing() // Use nothing() as base, then add
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::everything()),
-        );
-        let networks = Networks::new_with_refreshed_list();
+    ) -> Result<Self, AppError> {
+        // Determine page size once
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as u64;
+        let kstat = adapters::kstat::KstatReader::new()
+            .map_err(|e| AppError::ServiceUnavailable(format!("Failed to open kstat: {e:?}")))?;
 
-        // Initial refresh to prevent zero values
-        std::thread::sleep(Duration::from_millis(500));
-        system.refresh_cpu_all();
-        system.refresh_memory();
-
-        Self {
+        Ok(Self {
             receiver,
             broadcast_tx,
-            history: Arc::new(RwLock::new(VecDeque::with_capacity(3600))), // 1 hour buffer
-            system,
-            networks,
-            max_history: 3600, // Keep 1 hour of history @ 1s interval
+            history: Arc::new(RwLock::new(VecDeque::with_capacity(3600))),
+            max_history: 3600,
+            prev_cpu: HashMap::new(),
+            prev_net_rx: None,
+            prev_net_tx: None,
+            last_update: Instant::now(),
+            page_size,
             arc_warned: false,
-        }
+            kstat,
+        })
     }
 
     pub async fn run(mut self) {
-        info!("MetricsActor started");
+        info!("MetricsActor started (Native Illumos Backend)");
 
         // Timer for data collection (1Hz)
         let mut ticker = interval(Duration::from_secs(1));
@@ -89,13 +131,7 @@ impl MetricsActor {
                 }
                 maybe_cmd = self.receiver.recv() => {
                     match maybe_cmd {
-                        Some(cmd) => {
-                            match cmd {
-                                MetricsCommand::Subscribe(_) => {
-                                    // Handled by route handler mostly, but we could do logic here
-                                }
-                            }
-                        }
+                        Some(_) => {} // Handle subscriptions if needed
                         None => {
                             info!(target: "yanos::metrics", "MetricsActor control channel closed; exiting");
                             break;
@@ -107,70 +143,37 @@ impl MetricsActor {
     }
 
     async fn collect_and_broadcast(&mut self) {
-        // Refresh Data
-        self.system.refresh_cpu_all();
-        self.system.refresh_memory();
-        self.networks.refresh(false); // keep list, update counters
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.last_update).as_secs_f64();
+        let elapsed = if elapsed < 0.001 { 1.0 } else { elapsed };
+        self.last_update = now;
 
-        // 1. Calculate CPU
-        // sysinfo provides usage per core. We average it for global usage.
-        let cpus = self.system.cpus();
-        let cpu_count = cpus.len() as f32;
-        let mut total_usage = 0.0;
+        // Refresh kstat chain (lightweight check usually)
+        let _ = self.kstat.update();
 
-        for cpu in cpus {
-            total_usage += cpu.cpu_usage();
-        }
+        // 1. Memory (kstat named FFI)
+        let (mem_total, mem_used) = self.read_memory();
 
-        let global_usage = if cpu_count > 0.0 {
-            total_usage / cpu_count
-        } else {
-            0.0
-        };
-        // sysinfo combines user+sys into 'usage'.
-        // We will just use 'usage' as user+sys for now, and calc idle.
-        let cpu_idle = 100.0 - global_usage;
+        // 2. CPU (kstat counters via FFI)
+        let (cpu_user, cpu_system, cpu_idle, per_core) = self.read_cpu(elapsed);
 
-        // 2. Calculate RAM
-        let mem_total = self.system.total_memory() * 1024;
-        let mem_used_raw = self.system.used_memory() * 1024;
+        // 3. Network (kstat link counters)
+        let (rx_rate, tx_rate) = self.read_network(elapsed);
 
-        // TODO: Illumos specific ZFS ARC parsing.
-        // For now, on Linux/Illumos via sysinfo, used usually includes ARC.
-        // We will try to separate it if possible, otherwise set ARC to 0 (client handles it).
-        // Real ZFS ARC reading requires reading kstat.
-        let zfs_arc = self.read_arc_size_bytes().await;
-
-        // 3. Calculate Network (Delta)
-        // We need to track previous values to calc rate, OR rely on sysinfo providing rates?
-        // sysinfo `received()` is total bytes usually? No, docs say "total bytes received since boot" usually,
-        // but `Networks` struct usually has mechanism.
-        // WAIT: sysinfo 0.30+ might behave differently.
-        // Let's assume we need to diff.
-        // Actually, looking at sysinfo docs, `transmitted()` is total.
-        // To get B/s, we need to store prev state.
-        // But for simplicity in this turn, we will sum up all interfaces.
-
-        let mut total_rx = 0;
-        let mut total_tx = 0;
-
-        for (_name, data) in &self.networks {
-            total_rx += data.received(); // This is effectively "since last refresh" if configured right?
-            total_tx += data.transmitted();
-        }
-        // Sysinfo documentation says: "Refreshes data... returns... number of bytes received since the last refresh."
-        // PERFECT! So we don't need manual diffing if we refresh() periodically.
+        // 4. ZFS ARC (FFI)
+        let zfs_arc = self.read_arc_size_bytes();
 
         let point = MetricPoint {
             ts: chrono::Utc::now().timestamp_millis(),
-            cpu_user: global_usage, // approximating
-            cpu_system: 0.0,        // sysinfo doesn't easily split this cross-platform
+            cpu_user,
+            cpu_system,
             cpu_idle,
-            memory_used: mem_used_raw,
+            per_core,
+            memory_used: mem_used,
             memory_total: mem_total,
             zfs_arc,
-            rx_bytes: total_rx,
-            tx_bytes: total_tx,
+            rx_bytes: rx_rate,
+            tx_bytes: tx_rate,
         };
 
         // Update History
@@ -182,33 +185,107 @@ impl MetricsActor {
             hist.push_back(point.clone());
         }
 
-        // Broadcast
-        // We ignore error if no receivers (no one viewing dashboard)
         let _ = self.broadcast_tx.send(point);
     }
 
-    async fn read_arc_size_bytes(&mut self) -> u64 {
-        match adapters::kstat::read_arc_size_bytes() {
+
+
+    fn read_memory(&mut self) -> (u64, u64) {
+        let (phys_pages, free_pages) = self.kstat.get_memory_pages();
+        let total = phys_pages * self.page_size;
+        let used = (phys_pages.saturating_sub(free_pages)) * self.page_size;
+        (total, used)
+    }
+
+    fn read_cpu(&mut self, _elapsed: f64) -> (f32, f32, f32, Vec<CpuCoreMetric>) {
+        let mut total_user = 0u64;
+        let mut total_sys = 0u64;
+        let mut total_idle = 0u64;
+        let mut per_core = Vec::new();
+        let mut next_prev = HashMap::new();
+
+        let ticks = self.kstat.get_cpu_ticks_by_instance();
+        for (instance, raw) in ticks {
+            let current = CpuCounters {
+                idle: raw.idle,
+                user: raw.user,
+                kernel: raw.kernel,
+            };
+            next_prev.insert(instance, current);
+
+            let mut u_pct = 0.0;
+            let mut s_pct = 0.0;
+            let mut i_pct = 0.0;
+
+            if let Some(prev) = self.prev_cpu.get(&instance) {
+                let d_user = current.user.saturating_sub(prev.user);
+                let d_sys = current.kernel.saturating_sub(prev.kernel);
+                let d_idle = current.idle.saturating_sub(prev.idle);
+                let total = d_user + d_sys + d_idle;
+                if total > 0 {
+                    u_pct = (d_user as f32 / total as f32) * 100.0;
+                    s_pct = (d_sys as f32 / total as f32) * 100.0;
+                    i_pct = (d_idle as f32 / total as f32) * 100.0;
+                }
+                total_user += d_user;
+                total_sys += d_sys;
+                total_idle += d_idle;
+            }
+
+            per_core.push(CpuCoreMetric {
+                id: instance,
+                cpu_user: u_pct,
+                cpu_system: s_pct,
+                cpu_idle: i_pct,
+            });
+        }
+
+        self.prev_cpu = next_prev;
+
+        let mut agg_user = 0.0;
+        let mut agg_sys = 0.0;
+        let mut agg_idle = 0.0;
+        let total = total_user + total_sys + total_idle;
+        if total > 0 {
+            agg_user = (total_user as f32 / total as f32) * 100.0;
+            agg_sys = (total_sys as f32 / total as f32) * 100.0;
+            agg_idle = (total_idle as f32 / total as f32) * 100.0;
+        }
+
+        (agg_user, agg_sys, agg_idle, per_core)
+    }
+
+    fn read_network(&mut self, elapsed: f64) -> (u64, u64) {
+        // Sum rbytes64/obytes64 across all net-class kstats
+        let tot_rx = self.kstat.sum_field_any("rbytes64", Some("net"));
+        let tot_tx = self.kstat.sum_field_any("obytes64", Some("net"));
+
+        let rx_rate = if let Some(prev_rx) = self.prev_net_rx {
+            let d_rx = tot_rx.saturating_sub(prev_rx);
+            (d_rx as f64 / elapsed) as u64
+        } else {
+            0
+        };
+
+        let tx_rate = if let Some(prev_tx) = self.prev_net_tx {
+            let d_tx = tot_tx.saturating_sub(prev_tx);
+            (d_tx as f64 / elapsed) as u64
+        } else {
+            0
+        };
+
+        self.prev_net_rx = Some(tot_rx);
+        self.prev_net_tx = Some(tot_tx);
+
+        (rx_rate, tx_rate)
+    }
+
+    fn read_arc_size_bytes(&mut self) -> u64 {
+        match self.kstat.get_named("zfs", 0, "arcstats", "size") {
             Ok(size) => size,
-            Err(err) => {
+            Err(e) => {
                 if !self.arc_warned {
-                    match err {
-                        adapters::kstat::KstatError::Open(e) => {
-                            warn!(target: "yanos::metrics", error = ?e, "Failed to open kstat for ARC; reporting 0");
-                        }
-                        adapters::kstat::KstatError::Lookup(name) => {
-                            warn!(target: "yanos::metrics", entry = %name, "Failed to locate kstat entry for ARC; reporting 0");
-                        }
-                        adapters::kstat::KstatError::Read(e) => {
-                            warn!(target: "yanos::metrics", error = ?e, "Failed to read kstat ARC stats; reporting 0");
-                        }
-                        adapters::kstat::KstatError::MissingValue => {
-                            warn!(target: "yanos::metrics", "ARC size missing from kstat output; reporting 0");
-                        }
-                        adapters::kstat::KstatError::TypeMismatch(t) => {
-                            warn!(target: "yanos::metrics", data_type = t, "Unexpected kstat data type for ARC size; reporting 0");
-                        }
-                    }
+                    warn!(target: "yanos::metrics", error = ?e, "Failed to read ZFS ARC size via FFI; reporting 0");
                     self.arc_warned = true;
                 }
                 0
@@ -217,18 +294,18 @@ impl MetricsActor {
     }
 }
 
-pub fn start_metrics_actor() -> Arc<MetricsState> {
+pub fn start_metrics_actor() -> Result<Arc<MetricsState>, AppError> {
     let (command_tx, rx) = mpsc::channel(32);
     let (broadcast_tx, _) = broadcast::channel(100);
-    let actor = MetricsActor::new(rx, broadcast_tx.clone());
+    let actor = MetricsActor::new(rx, broadcast_tx.clone())?;
 
     let history = actor.history.clone();
 
     tokio::spawn(actor.run());
 
-    Arc::new(MetricsState {
+    Ok(Arc::new(MetricsState {
         broadcast_tx,
         history,
         command_tx,
-    })
+    }))
 }

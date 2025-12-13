@@ -1,19 +1,40 @@
-use std::{fs, io, path::{Path, PathBuf}};
+//! Application configuration management.
+//!
+//! Handles loading and persisting yanOS configuration from JSON files.
+//! Configuration is intentionally minimal - most system state is read
+//! directly from the OS (following "system files as source of truth").
+//!
+//! # Default Location
+//! `/etc/opt/yanos/config.json`
+//!
+//! # Current Settings
+//! - `telemetry.otlp_endpoint` - Optional OpenTelemetry OTLP endpoint URL
+
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::error::AppError;
 
+/// Default path for the application configuration file
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/opt/yanos/config.json";
 
+/// Telemetry/observability configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TelemetryConfig {
+    /// OpenTelemetry OTLP collector endpoint (e.g., "http://localhost:4317")
     pub otlp_endpoint: Option<String>,
 }
 
+/// Root application configuration.
+/// Add new settings here as the application grows.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
+    /// Telemetry settings (optional)
     pub telemetry: TelemetryConfig,
 }
 

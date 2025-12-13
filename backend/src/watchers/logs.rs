@@ -1,3 +1,18 @@
+//! System log file watcher for real-time log streaming.
+//!
+//! This module tails system log files (like /var/adm/messages on illumos)
+//! and publishes new log lines to the EventBus for streaming to the UI.
+//!
+//! # Behavior
+//! - On startup, preloads the last 500 lines for immediate history
+//! - Seeks to end of file after preload
+//! - Polls for new lines every 500ms
+//! - Automatically reopens the file if it's rotated or truncated
+//!
+//! # Thread Model
+//! Runs on a blocking thread via `spawn_blocking` since file I/O
+//! should not block the async runtime.
+
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
@@ -8,7 +23,14 @@ use tracing::{error, info};
 
 use crate::events::{EventBus, ExternalEvent};
 
-/// Tails a system log file (e.g., /var/adm/messages) and forwards new lines to the event bus.
+/// Starts a background task that tails a log file and publishes to the event bus.
+///
+/// # Arguments
+/// * `path` - Path to the log file (e.g., /var/adm/messages)
+/// * `bus` - EventBus to publish SystemLog events to
+///
+/// # Returns
+/// JoinHandle for the blocking task, or error if file cannot be opened.
 pub fn start_system_log_watcher(
     path: &Path,
     bus: EventBus,
