@@ -13,7 +13,8 @@ use std::sync::Arc;
     path = "/api/v1/metrics/live",
     tag = "metrics",
     responses(
-        (status = 101, description = "WebSocket Upgrade")
+        (status = 101, description = "WebSocket Upgrade"),
+        (status = 400, description = "Bad Request (Missing Upgrade header)")
     ),
     security(
         ("basic_auth" = [])
@@ -37,8 +38,9 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<MetricsState>) {
             .collect::<Vec<_>>()
     };
 
-    for point in history {
-        if let Ok(json) = serde_json::to_string(&point) {
+    // Send history as a single batch
+    if !history.is_empty() {
+        if let Ok(json) = serde_json::to_string(&history) {
             if socket.send(Message::Text(json.into())).await.is_err() {
                 return;
             }
