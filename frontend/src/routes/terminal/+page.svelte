@@ -3,11 +3,30 @@
     import '@xterm/xterm/css/xterm.css';
     import { auth } from '$lib/auth.svelte.js';
     import { browser } from '$app/environment';
+    import { theme } from '$lib/theme.svelte.js';
 
     let terminalContainer = $state(null);
     let term = $state(null);
     let socket = $state(null);
     let fitAddon = $state(null);
+
+    $effect(() => {
+        if (browser && term && theme.current) {
+            // Wait for the DOM to update with the new data-theme attribute
+            requestAnimationFrame(() => {
+                const computed = getComputedStyle(document.documentElement);
+                const background = computed.getPropertyValue('--bg-sidebar').trim();
+                const foreground = computed.getPropertyValue('--text-sidebar').trim();
+                
+                if (background && foreground) {
+                    term.options.theme = {
+                        background,
+                        foreground
+                    };
+                }
+            });
+        }
+    });
 
     function resizeTerminal() {
         if (fitAddon && term) {
@@ -36,7 +55,8 @@
         term = new Terminal({
             cursorBlink: true,
             theme: {
-                background: '#1f2937', // Match bg-sidebar
+                // Initial fallback, will be updated by the $effect immediately
+                background: '#1f2937', 
                 foreground: '#ffffff',
             },
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',

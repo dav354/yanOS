@@ -68,6 +68,7 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("USER", &username);
         cmd.env("LOGNAME", &username);
+        cmd.env("PS1", r"\u@\h \w $ ");
         cmd
     };
 
