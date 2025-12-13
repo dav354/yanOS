@@ -18,6 +18,7 @@ pub use state::AppState;
         status::get_status,
         status::system_info,
         crate::auth::pam::login_handler,
+        crate::auth::pam::logout_handler,
         routes::logs::list_logs,
         routes::events::stream_events,
         routes::metrics::live_metrics,

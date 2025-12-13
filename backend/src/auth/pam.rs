@@ -1,10 +1,26 @@
+//! PAM-based authentication for system user login.
+//!
+//! This module provides authentication against the system's PAM stack,
+//! allowing users to log in with their illumos/OmniOS system credentials.
+//!
+//! # PAM Configuration
+//! By default, uses the "yanos" PAM service (configurable via PAM_SERVICE_NAME env).
+//! Create `/etc/pam.d/yanos` or add to `/etc/pam.conf`:
+//! ```text
+//! yanos  auth    required  pam_unix_auth.so.1
+//! ```
+//!
+//! # Session Management
+//! On successful authentication, the username is stored in the session
+//! for subsequent request authentication via the auth_guard middleware.
+
 use std::ffi::CString;
 use std::ptr;
 
-use axum::{Json, Router, routing::post};
+use axum::{routing::post, Json, Router};
 use pam_sys::{
-    PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PAM_SUCCESS, pam_authenticate, pam_end, pam_handle_t,
-    pam_message, pam_response, pam_start, pam_strerror,
+    pam_authenticate, pam_end, pam_handle_t, pam_message, pam_response, pam_start, pam_strerror,
+    PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PAM_SUCCESS,
 };
 use tower_sessions::Session;
 use tracing::{error, info, instrument};
@@ -27,7 +43,9 @@ pub fn add_auth_routes<S>(router: Router<S>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    router.route("/api/v1/login", post(login_handler))
+    router
+        .route("/api/v1/login", post(login_handler))
+        .route("/api/v1/logout", post(logout_handler))
 }
 
 /// Struct to hold the credentials for the PAM conversation callback.
@@ -110,6 +128,23 @@ pub async fn login_handler(
         .map_err(|e| AppError::InternalServerError(format!("Failed to insert into session: {}", e)))?;
 
     Ok(Json("Authentication successful"))
+}
+
+/// Handles the logout request, clearing the session.
+#[utoipa::path(
+    post,
+    path = "/api/v1/logout",
+    responses(
+        (status = 200, description = "Logout successful")
+    )
+)]
+#[instrument(skip(session))]
+pub async fn logout_handler(session: Session) -> Result<Json<&'static str>, AppError> {
+    session.flush().await.map_err(|e| {
+        AppError::InternalServerError(format!("Failed to clear session: {}", e))
+    })?;
+    info!("User logged out");
+    Ok(Json("Logout successful"))
 }
 
 /// Authenticates a user against the configured PAM stack.
