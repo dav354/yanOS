@@ -17,8 +17,7 @@
     let showPendingModal = $state(false);
     let pendingUrl = $state(null);
     let savingTelemetry = $state(false);
-    let testingTelemetry = $state(false);
-    let testStatus = $state(null);
+    let saveStatus = $state(null); // { type: 'success' | 'error', message: string }
     let telemetryLoaded = $state(false);
 
     const telemetryDirty = $derived(pendingOtlpEndpoint !== appliedOtlpEndpoint);
@@ -47,7 +46,7 @@
     async function saveTelemetry() {
         if (!telemetryDirty) return;
         savingTelemetry = true;
-        testStatus = null;
+        saveStatus = null;
         const token = auth.readCsrfFromCookie?.() ?? auth.csrfToken;
         try {
             const res = await fetch('/api/v1/settings/telemetry', {
@@ -66,38 +65,16 @@
                 const data = await res.json();
                 appliedOtlpEndpoint = data.otlp_endpoint ?? '';
                 pendingOtlpEndpoint = appliedOtlpEndpoint;
+                saveStatus = { type: 'success', message: i18n.t('settings.telemetryTestSuccess') };
+            } else {
+                const err = await res.json();
+                saveStatus = { type: 'error', message: err.error || i18n.t('settings.telemetryTestFail') };
             }
         } catch (e) {
             console.error('Failed to save telemetry settings', e);
+            saveStatus = { type: 'error', message: i18n.t('settings.telemetryTestFail') };
         } finally {
             savingTelemetry = false;
-        }
-    }
-
-    async function testTelemetry() {
-        if (!browser || !pendingOtlpEndpoint.trim()) {
-            testStatus = 'fail';
-            return;
-        }
-        testingTelemetry = true;
-        testStatus = null;
-        const token = auth.readCsrfFromCookie?.() ?? auth.csrfToken;
-        try {
-            const res = await fetch('/api/v1/settings/telemetry/test', {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'X-CSRF-TOKEN': token } : {})
-                },
-                body: JSON.stringify({ otlp_endpoint: pendingOtlpEndpoint.trim() })
-            });
-            testStatus = res.ok ? 'ok' : 'fail';
-        } catch (e) {
-            console.error('Failed to test telemetry endpoint', e);
-            testStatus = 'fail';
-        } finally {
-            testingTelemetry = false;
         }
     }
 
@@ -244,22 +221,15 @@
                     placeholder={i18n.t('settings.otlpPlaceholder')}
                     bind:value={pendingOtlpEndpoint}
                 />
-                <button
-                    class="px-4 py-2 bg-bg-main text-text-main border border-border-main rounded text-sm hover:border-primary disabled:opacity-50"
-                    type="button"
-                    onclick={testTelemetry}
-                    disabled={testingTelemetry}
-                >
-                    {testingTelemetry ? '...' : i18n.t('settings.telemetryTest')}
-                </button>
             </div>
             <p class="text-xs text-text-muted">{i18n.t('settings.telemetryDisabled')}</p>
-            {#if testStatus === 'ok'}
-                <p class="text-xs text-green-600">{i18n.t('settings.telemetryTestSuccess')}</p>
-            {:else if testStatus === 'fail'}
-                <p class="text-xs text-red-600">{i18n.t('settings.telemetryTestFail')}</p>
-            {/if}
-            <div class="flex justify-end pt-2 mt-2">
+            
+            <div class="flex items-center justify-end gap-3 pt-2 mt-2">
+                {#if saveStatus}
+                    <span class={`text-xs ${saveStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                        {saveStatus.message}
+                    </span>
+                {/if}
                 <button
                     class="px-4 py-2 bg-primary text-primary-fg rounded text-sm hover:bg-primary-hover disabled:opacity-50"
                     onclick={saveTelemetry}
