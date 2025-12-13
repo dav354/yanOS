@@ -12,6 +12,7 @@ use std::sync::Arc;
     get,
     path = "/api/v1/metrics/live",
     tag = "metrics",
+    description = "Stream live metrics via WebSocket. \n\n**Note:** This endpoint requires a WebSocket client connection (Upgrade: websocket). Standard HTTP requests (like Swagger UI 'Try it out') will fail with `400 Bad Request`.",
     responses(
         (status = 101, description = "WebSocket Upgrade"),
         (status = 400, description = "Bad Request (Missing Upgrade header)")

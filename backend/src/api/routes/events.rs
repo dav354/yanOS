@@ -19,8 +19,10 @@ struct EventStreamUpgrade;
     get,
     path = "/api/v1/events",
     tag = "events",
+    description = "Stream system events (logs, config changes, etc.) via WebSocket. \n\n**Note:** This endpoint requires a WebSocket client connection (Upgrade: websocket). Standard HTTP requests will fail with `400 Bad Request`.",
     responses(
-        (status = 101, description = "WebSocket upgrade for live events", body = EventStreamUpgrade)
+        (status = 101, description = "WebSocket upgrade for live events", body = EventStreamUpgrade),
+        (status = 400, description = "Bad Request (Missing Upgrade header)")
     ),
     security(
         ("basic_auth" = [])

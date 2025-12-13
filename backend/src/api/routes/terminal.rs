@@ -24,6 +24,20 @@ enum ClientMessage {
     Resize { rows: u16, cols: u16 },
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/terminal",
+    tag = "terminal",
+    description = "Interactive terminal session via WebSocket. \n\n**Note:** This endpoint requires a WebSocket client connection (Upgrade: websocket). Standard HTTP requests will fail with `400 Bad Request`.",
+    responses(
+        (status = 101, description = "WebSocket upgrade for terminal"),
+        (status = 400, description = "Bad Request (Missing Upgrade header)"),
+        (status = 401, description = "Unauthorized (Login required)")
+    ),
+    security(
+        ("basic_auth" = [])
+    )
+)]
 #[instrument(skip(ws, session))]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,

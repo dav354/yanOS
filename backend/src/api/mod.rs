@@ -21,6 +21,7 @@ pub use state::AppState;
         routes::logs::list_logs,
         routes::events::stream_events,
         routes::metrics::live_metrics,
+        routes::terminal::ws_handler,
         routes::settings::get_telemetry,
         routes::settings::update_telemetry,
         resources::list_network,
