@@ -24,7 +24,11 @@
         ws.onmessage = (evt) => {
             try {
                 const payload = JSON.parse(evt.data);
-                // Prepend new events (payload already has ts)
+                console.log('Log Event:', payload);
+                // Ensure ts exists, default to now if missing
+                if (!payload.ts) { 
+                    payload.ts = new Date().toISOString(); 
+                }
                 events = [payload, ...events].slice(0, 200);
             } catch (e) {
                 console.error('Failed to parse event', e);
@@ -33,7 +37,6 @@
         
         ws.onclose = () => {
             eventSocket = null;
-            // Optional: Reconnect logic could go here
         };
     }
 
@@ -51,6 +54,15 @@
 
     function toggle() {
         isExpanded = !isExpanded;
+    }
+
+    function formatTime(ts) {
+        if (!ts) return '';
+        try {
+            return ts.split('T')[1].replace('Z','');
+        } catch {
+            return ts;
+        }
     }
 </script>
 
@@ -76,18 +88,12 @@
         {:else}
             <table class="w-full text-left">
                 <tbody>
-                    {#each events as event}
+                    {#each events as item}
                         <tr class="hover:bg-white/5">
-                            <td class="whitespace-nowrap text-text-sidebar-muted py-0.5 w-40">{event.ts.split('T')[1].replace('Z','')}</td>
-                            <td class="whitespace-nowrap text-primary py-0.5 w-32 font-bold">{event.event?.type}</td>
+                            <td class="whitespace-nowrap text-text-sidebar-muted py-0.5 w-40">{formatTime(item.ts)}</td>
+                            <td class="whitespace-nowrap text-primary py-0.5 w-32 font-bold">{item.type || 'INFO'}</td>
                             <td class="text-text-sidebar py-0.5 break-all">
-                                {#if event.event?.line}
-                                    {event.event.line}
-                                {:else if event.event?.path}
-                                    <span class="text-yellow-600 mr-2">[{event.event.path}]</span>
-                                {:else}
-                                    {JSON.stringify(event.event ?? event).substring(0, 100)}...
-                                {/if}
+                                {JSON.stringify(item)}
                             </td>
                         </tr>
                     {/each}

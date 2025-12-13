@@ -106,13 +106,23 @@
         const ws = new WebSocket(`${protocol}://${location.host}/api/v1/metrics/live`);
         metricsSocket = ws;
         
+        ws.onopen = () => {
+            console.log('Metrics WebSocket connected');
+        };
+
+        ws.onerror = (e) => {
+            console.error('Metrics WebSocket error', e);
+        };
+
         let batchTimer = null;
         
         ws.onmessage = (evt) => {
+            // console.debug('Metrics received', evt.data.length);
             try {
                 const parsed = JSON.parse(evt.data);
 
                 if (Array.isArray(parsed)) {
+                    console.log('Received history batch', parsed.length);
                     parsed.forEach(applyMetric);
                     triggerUpdate();
                     return;
@@ -130,7 +140,8 @@
                 console.error('Failed to parse metrics', e);
             }
         };
-        ws.onclose = () => {
+        ws.onclose = (e) => {
+            console.log('Metrics WebSocket closed', e.code, e.reason);
             metricsSocket = null;
         };
     }

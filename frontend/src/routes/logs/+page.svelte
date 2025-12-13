@@ -4,11 +4,16 @@
 
     const severityOrder = { info: 0, warn: 1, error: 2 };
     let entries = $state([]);
+    let seen = $state(new Set());
     let filterLevel = $state('all');
     let sortMode = $state('time'); // 'time' or 'level'
     let socket = null;
     let oldestTs = $state(null);
     let isLoadingMore = $state(false);
+    let hasLoadedInitial = $state(false);
+    let connectionError = $state(null);
+    let isConnected = $state(false);
+    let reconnectTimer = null;
 
     function levelFor(event) {
         const t = (event.type || '').toLowerCase();
@@ -17,6 +22,10 @@
         if (event.line && /error|fail/i.test(event.line)) return 'error';
         if (event.line && /warn/i.test(event.line)) return 'warn';
         return 'info';
+    }
+
+    function entryKey(ts, text) {
+        return `${ts}|${text}`;
     }
 
     function asText(event) {
@@ -48,26 +57,70 @@
         const ev = logged.event ?? logged;
         const level = levelFor(ev);
         const text = `[${logged.ts}] [${level.toUpperCase()}] ${asText(ev)}`;
+        const key = entryKey(logged.ts, text);
+
+        if (seen.has(key)) return;
+        seen.add(key);
+
         entries = [{ ts: logged.ts, level, text }, ...entries].slice(0, 1000);
         if (!oldestTs || logged.ts < oldestTs) {
             oldestTs = logged.ts;
         }
+
+        if (seen.size > 1500) {
+            seen = new Set(entries.map((entry) => entryKey(entry.ts, entry.text)));
+        }
+    }
+
+    async function loadInitial() {
+        try {
+            const res = await fetch('/api/v1/logs?limit=200', { credentials: 'include' });
+            if (res.ok) {
+                const data = await res.json();
+                data.forEach((log) => ingest(log));
+                connectionError = null;
+                return true;
+            } else if (res.status === 401) {
+                connectionError = i18n.t('logs.unauth');
+            } else {
+                connectionError = `${i18n.t('logs.loadError')} (${res.status})`;
+            }
+        } catch (err) {
+            connectionError = i18n.t('logs.loadError');
+            console.error('Failed to load initial logs', err);
+            return false;
+        }
+        return false;
     }
 
     async function loadMore() {
         if (isLoadingMore || !oldestTs) return;
         isLoadingMore = true;
         try {
-            const res = await fetch(`/api/v1/logs?before=${encodeURIComponent(oldestTs)}&limit=200`);
+            const res = await fetch(
+                `/api/v1/logs?before=${encodeURIComponent(oldestTs)}&limit=200`,
+                { credentials: 'include' },
+            );
             if (res.ok) {
                 const data = await res.json();
                 data.forEach((log) => ingest(log));
+            } else if (res.status === 401) {
+                connectionError = i18n.t('logs.unauth');
             }
         } catch (err) {
             console.error('Failed to load more logs', err);
+            connectionError = i18n.t('logs.loadError');
         } finally {
             isLoadingMore = false;
         }
+    }
+
+    function scheduleReconnect() {
+        if (reconnectTimer || !auth.isAuthenticated) return;
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+        }, 1500);
     }
 
     function connect() {
@@ -76,6 +129,7 @@
                 socket.close();
                 socket = null;
             }
+            isConnected = false;
             return;
         }
 
@@ -83,6 +137,18 @@
 
         const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
         socket = new WebSocket(`${protocol}://${location.host}/api/v1/events`);
+
+        socket.onopen = () => {
+            isConnected = true;
+            connectionError = null;
+            if (!hasLoadedInitial) {
+                loadInitial().then((ok) => {
+                    if (ok) {
+                        hasLoadedInitial = true;
+                    }
+                });
+            }
+        };
 
         socket.onmessage = (evt) => {
             try {
@@ -93,18 +159,49 @@
             }
         };
 
+        socket.onerror = () => {
+            connectionError = i18n.t('logs.streamError');
+            isConnected = false;
+            scheduleReconnect();
+        };
+
         socket.onclose = () => {
             socket = null;
+            isConnected = false;
+            scheduleReconnect();
         };
     }
 
     $effect(() => {
+        let cancelled = false;
+
+        if (auth.isAuthenticated && !hasLoadedInitial) {
+            loadInitial().then((ok) => {
+                if (!cancelled && ok) {
+                    hasLoadedInitial = true;
+                }
+            });
+        }
+
+        if (!auth.isAuthenticated) {
+            entries = [];
+            seen = new Set();
+            oldestTs = null;
+            hasLoadedInitial = false;
+            connectionError = null;
+        }
+
         connect();
         return () => {
             if (socket) {
                 socket.close();
                 socket = null;
             }
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            cancelled = true;
         };
     });
 
@@ -133,6 +230,15 @@
             <p class="text-text-muted">{i18n.t('logs.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2">
+            <div
+                class={`text-xs px-2 py-1 rounded border ${
+                    isConnected
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-300 bg-amber-50 text-amber-700'
+                }`}
+            >
+                {isConnected ? i18n.t('logs.liveConnected') : i18n.t('logs.liveDisconnected')}
+            </div>
             <select
                 class="border border-border-main bg-bg-card text-text-main text-sm rounded px-2 py-1"
                 bind:value={filterLevel}
@@ -151,6 +257,12 @@
             </select>
         </div>
     </header>
+
+    {#if connectionError && auth.isAuthenticated}
+        <div class="bg-amber-50 text-amber-800 border border-amber-200 rounded p-3 text-sm">
+            {connectionError}
+        </div>
+    {/if}
 
     {#if !auth.isAuthenticated}
         <div class="bg-amber-50 text-amber-800 border border-amber-200 rounded p-4">

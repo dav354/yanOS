@@ -98,7 +98,7 @@ impl MetricsActor {
                             }
                         }
                         None => {
-                            info!(target: "zos::metrics", "MetricsActor control channel closed; exiting");
+                            info!(target: "yanos::metrics", "MetricsActor control channel closed; exiting");
                             break;
                         }
                     }
@@ -195,13 +195,13 @@ impl MetricsActor {
                 if !self.arc_warned {
                     match err {
                         ArcReadError::Io(e) => {
-                            warn!(target: "zos::metrics", error = ?e, "I/O error reading ARC size from kstat; reporting 0");
+                            warn!(target: "yanos::metrics", error = ?e, "I/O error reading ARC size from kstat; reporting 0");
                         }
                         ArcReadError::Status(status) => {
-                            warn!(target: "zos::metrics", status = ?status, "kstat returned non-zero status; reporting 0");
+                            warn!(target: "yanos::metrics", status = ?status, "kstat returned non-zero status; reporting 0");
                         }
                         ArcReadError::MissingValue => {
-                            warn!(target: "zos::metrics", "ARC size missing from kstat output; reporting 0");
+                            warn!(target: "yanos::metrics", "ARC size missing from kstat output; reporting 0");
                         }
                     }
                     self.arc_warned = true;
@@ -210,7 +210,7 @@ impl MetricsActor {
             }
             Err(join_error) => {
                 if !self.arc_warned {
-                    warn!(target: "zos::metrics", error = ?join_error, "Join error while reading ARC size; reporting 0");
+                    warn!(target: "yanos::metrics", error = ?join_error, "Join error while reading ARC size; reporting 0");
                     self.arc_warned = true;
                 }
                 0
