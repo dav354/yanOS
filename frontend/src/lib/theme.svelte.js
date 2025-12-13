@@ -5,7 +5,7 @@ class ThemeStore {
 
     constructor() {
         if (browser) {
-            const saved = localStorage.getItem('zos-theme');
+            const saved = localStorage.getItem('yanos-theme');
             if (saved) {
                 this.setTheme(saved);
             }
@@ -15,7 +15,7 @@ class ThemeStore {
     setTheme(name) {
         this.current = name;
         if (browser) {
-            localStorage.setItem('zos-theme', name);
+            localStorage.setItem('yanos-theme', name);
             document.documentElement.setAttribute('data-theme', name);
         }
     }

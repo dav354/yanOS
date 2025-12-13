@@ -86,7 +86,7 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
             Ok(child) => child,
             Err(e) => {
                 // Fall back to shell if login -f is not permitted (e.g., not console or not root)
-                info!(target: "zos::terminal_actor", error=?e, "login -f failed, falling back to shell");
+                info!(target: "yanos::terminal_actor", error=?e, "login -f failed, falling back to shell");
                 pair.slave.spawn_command(build_shell()).map_err(|e| {
                     AppError::InternalServerError(format!("spawn shell failed: {e}"))
                 })?
@@ -149,7 +149,7 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
                     }
                 }
                 TerminalMessage::Shutdown => {
-                    info!(target: "zos::terminal_actor", "shutdown requested");
+                    info!(target: "yanos::terminal_actor", "shutdown requested");
                     break;
                 }
             }
