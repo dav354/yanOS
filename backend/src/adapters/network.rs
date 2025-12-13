@@ -15,8 +15,13 @@ pub fn get_network_interfaces() -> Result<Vec<NetworkInterface>, AppError> {
                 .filter_map(|line| {
                     let parts: Vec<&str> = line.split(':').collect();
                     if parts.len() >= 3 {
+                        let name = parts[0].to_string();
+                        // Filter out loopback interfaces (e.g., lo0/v4, lo0/v6)
+                        if name.starts_with("lo") {
+                            return None;
+                        }
                         Some(NetworkInterface {
-                            name: parts[0].to_string(),
+                            name,
                             state: parts[1].to_string(),
                             address: parts[2].to_string(),
                         })
