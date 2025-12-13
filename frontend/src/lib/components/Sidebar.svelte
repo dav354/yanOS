@@ -20,8 +20,8 @@
 
     const settingsSections = [
         { id: 'ui', key: 'settings.uiSection' },
+        { id: 'telemetry', key: 'settings.telemetry' },
         { id: 'notifications', key: 'settings.notifications' },
-        { id: 'integrations', key: 'settings.integrations' },
         { id: 'about', key: 'settings.about' },
     ];
 

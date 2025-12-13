@@ -9,6 +9,7 @@
     let term = $state(null);
     let socket = $state(null);
     let fitAddon = $state(null);
+    let started = $state(false);
 
     $effect(() => {
         if (browser && term && theme.current) {
@@ -41,10 +42,9 @@
         }
     }
 
-    onMount(async () => {
-        if (!browser || !auth.isAuthenticated) {
-            return;
-        }
+    async function startTerminal() {
+        if (started || !browser || !auth.isAuthenticated || !terminalContainer) return;
+        started = true;
 
         const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
             import('@xterm/xterm'),
@@ -56,7 +56,7 @@
             cursorBlink: true,
             theme: {
                 // Initial fallback, will be updated by the $effect immediately
-                background: '#1f2937', 
+                background: '#1f2937',
                 foreground: '#ffffff',
             },
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -119,6 +119,17 @@
 
         // Handle resize
         window.addEventListener('resize', resizeTerminal);
+    }
+
+    onMount(() => {
+        // Defer start until auth is ready and container exists
+        startTerminal();
+    });
+
+    $effect(() => {
+        if (auth.isInitialized && auth.isAuthenticated) {
+            startTerminal();
+        }
     });
 
     onDestroy(() => {
