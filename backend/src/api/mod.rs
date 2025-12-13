@@ -1,6 +1,6 @@
 use axum::Router;
 use utoipa::{Modify, OpenApi};
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 // Route handlers need to be public for utoipa macro to see them
 pub use crate::api::routes::{health, resources, status};
 
@@ -23,7 +23,6 @@ pub use state::AppState;
         routes::metrics::live_metrics,
         routes::settings::get_telemetry,
         routes::settings::update_telemetry,
-        routes::settings::test_telemetry,
         resources::list_network,
         resources::list_packages,
         resources::list_updates,
@@ -66,6 +65,14 @@ impl Modify for SecurityAddon {
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .url("/api-docs/openapi.json", ApiDoc::openapi())
+                .config(
+                    Config::from("/api-docs/openapi.json")
+                        .persist_authorization(true)
+                        .try_it_out_enabled(true),
+                ),
+        )
         .nest("/api/v1", routes::mod_routes())
 }
