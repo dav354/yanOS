@@ -28,12 +28,16 @@ const translations = {
             filterInfo: 'Info',
             sortTime: 'Newest first',
             sortLevel: 'Sort by level',
+            liveConnected: 'Live stream connected',
+            liveDisconnected: 'Reconnecting log stream...',
+            loadError: 'Unable to load logs',
+            streamError: 'Log stream disconnected',
         },
         settings: {
             title: 'Settings',
             subtitle: 'Choose your theme and interface language.',
             theme: 'Theme',
-            themeSubtitle: 'Pick a look for zOS.',
+            themeSubtitle: 'Pick a look for yanOS.',
             themeActive: 'Active',
             themeActivate: 'Click to activate',
             language: 'Language',
@@ -59,8 +63,15 @@ const translations = {
             refresh: 'Refresh',
             loading: 'Loading package list...',
             empty: 'No packages found (or unable to fetch).',
+            updatesAvailable: 'Updates Available',
+            applyAll: 'Apply All Updates',
+            checkUpdates: 'Check Updates',
+            updateAction: 'Update',
+            updateAvailableStatus: 'Update Available',
+            statusHeader: 'IPS Status Codes (XYZ):\n1. Pos (State): i=installed, -=not installed\n2. Pos (Meta): m=manifest defined, -=none\n3. Pos (Freeze): f=frozen, -=active\n4. Pos (Obsolete): o=obsolete, r=renamed, -=current',
         },
         tasks: {
+            title: 'Tasks',
             title: 'Tasks',
             subtitle: 'Scrubs, replication, and scheduled jobs.',
             none: 'No active tasks.',
@@ -93,12 +104,16 @@ const translations = {
             filterInfo: 'Info',
             sortTime: 'Neueste zuerst',
             sortLevel: 'Nach Level sortieren',
+            liveConnected: 'Live-Stream verbunden',
+            liveDisconnected: 'Log-Stream wird neu verbunden...',
+            loadError: 'Logs konnten nicht geladen werden',
+            streamError: 'Log-Stream getrennt',
         },
         settings: {
             title: 'Einstellungen',
             subtitle: 'Theme und Sprache wählen.',
             theme: 'Theme',
-            themeSubtitle: 'Look für zOS wählen.',
+            themeSubtitle: 'Look für yanOS wählen.',
             themeActive: 'Aktiv',
             themeActivate: 'Zum Aktivieren klicken',
             language: 'Sprache',
@@ -124,6 +139,12 @@ const translations = {
             refresh: 'Neu laden',
             loading: 'Lade Paketliste...',
             empty: 'Keine Pakete gefunden (oder Fehler beim Abruf).',
+            updatesAvailable: 'Verfügbare Updates',
+            applyAll: 'Alle aktualisieren',
+            checkUpdates: 'Nach Updates suchen',
+            updateAction: 'Aktualisieren',
+            updateAvailableStatus: 'Update verfügbar',
+            statusHeader: 'IPS Status Codes (XYZ):\n1. Pos (Status): i=installiert, -=nicht installiert\n2. Pos (Meta): m=Manifest definiert, -=keines\n3. Pos (Freeze): f=eingefroren, -=aktiv\n4. Pos (Veraltet): o=obsolete, r=umbenannt, -=aktuell',
         },
         tasks: {
             title: 'Tasks',
@@ -138,7 +159,7 @@ class I18nStore {
 
     constructor() {
         if (browser) {
-            const saved = localStorage.getItem('zos-lang');
+            const saved = localStorage.getItem('yanos-lang');
             if (saved && translations[saved]) {
                 this.current = saved;
             }
@@ -149,7 +170,7 @@ class I18nStore {
         if (!translations[lang]) return;
         this.current = lang;
         if (browser) {
-            localStorage.setItem('zos-lang', lang);
+            localStorage.setItem('yanos-lang', lang);
         }
     }
 

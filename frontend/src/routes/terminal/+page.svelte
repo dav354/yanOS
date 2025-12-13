@@ -76,8 +76,23 @@
         socket.binaryType = 'arraybuffer';
 
         socket.onopen = () => {
-            term.write('\r\n\x1b[32mConnected to zOS Terminal\x1b[0m\r\n');
+            term.write('\r\n\x1b[32mConnected to yanOS Terminal\x1b[0m\r\n');
             resizeTerminal();
+
+            // Auto-run command from URL if present
+            const params = new URLSearchParams(window.location.search);
+            const cmd = params.get('cmd');
+            if (cmd) {
+                // Small delay to ensure shell is ready for input
+                setTimeout(() => {
+                    socket.send(JSON.stringify({
+                        type: 'input',
+                        data: cmd + '\r'
+                    }));
+                    // Clear the query param so refresh doesn't re-run it
+                    window.history.replaceState({}, '', location.pathname);
+                }, 500);
+            }
         };
 
         socket.onmessage = (event) => {
