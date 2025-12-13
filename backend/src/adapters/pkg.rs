@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::process::Command;
 use tracing::warn;
 use std::thread;
@@ -88,34 +87,31 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
     ))
 }
 
+/// Get list of packages with available updates and their NEW version info.
+///
+/// Returns PackageInfo with the NEW (remote) version/build_time, not the installed one.
+/// The frontend compares this against the installed list to show the diff.
 pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
-    // Step 1: Get list of installed packages that have updates available.
-    // output: NAME FMRI (of installed version)
-    let list_output = Command::new("pkg").args(["list", "-uH", "-o", "name,fmri"]).output();
-    
-    let mut base_updates: Vec<PackageInfo> = Vec::new();
+    // Step 1: Get list of package names that have updates available.
+    // `pkg list -u` shows installed packages with newer versions in the repo.
+    let list_output = Command::new("pkg").args(["list", "-uH", "-o", "name"]).output();
+
     let mut names: Vec<String> = Vec::new();
 
     match list_output {
         Ok(out) if out.status.success() => {
             for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let name = parts[0].to_string();
-                    let fmri = parts[1];
-                    let (_, version, build_time) = parse_fmri(fmri);
-                    
-                    names.push(name.clone());
-                    base_updates.push(PackageInfo {
-                        name,
-                        version,
-                        build_time,
-                        status: "upgrade_available".to_string(),
-                    });
+                let name = line.trim();
+                if !name.is_empty() {
+                    names.push(name.to_string());
                 }
             }
         }
         Ok(out) => {
+            // Exit code 4 = no updates available (not an error)
+            if out.status.code() == Some(4) {
+                return Ok(vec![]);
+            }
             warn!(
                 target: "zos::pkg_adapter",
                 code = ?out.status.code(),
@@ -142,12 +138,11 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
         return Ok(vec![]);
     }
 
-    // Step 2: Get remote info for these packages to get the NEW version/timestamp
-    // This might fail or return partial results. We use a Map to merge.
-    let mut remote_info: HashMap<String, PackageInfo> = HashMap::new();
-    
+    // Step 2: Get remote (NEW) version info for these packages.
+    // `pkg info -r` shows the latest available version in the repository.
+    let mut updates: Vec<PackageInfo> = Vec::new();
+
     let mut cmd = Command::new("pkg");
-    // OmniOS pkg(1) lacks -o for info; we must parse verbose output.
     cmd.args(["info", "-r"]);
     cmd.args(&names);
 
@@ -155,14 +150,14 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
         if !out.status.success() {
             warn!(
                 target: "zos::pkg_adapter",
-                "pkg info failed (partial results?): code={:?}, stderr={}",
+                "pkg info -r failed (partial results?): code={:?}, stderr={}",
                 out.status.code(),
                 String::from_utf8_lossy(&out.stderr)
             );
         }
 
         if !out.stdout.is_empty() {
-            let mut current_name = None;
+            let mut current_name: Option<String> = None;
             for line in String::from_utf8_lossy(&out.stdout).lines() {
                 let line = line.trim();
                 if let Some(val) = line.strip_prefix("Name: ") {
@@ -171,8 +166,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                     if let Some(name) = current_name.take() {
                         let fmri = val;
                         let (_, version, build_time) = parse_fmri(fmri);
-                        
-                        remote_info.insert(name.clone(), PackageInfo {
+
+                        updates.push(PackageInfo {
                             name,
                             version,
                             build_time,
@@ -183,16 +178,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
             }
         }
     }
-    
-    // Step 3: Merge. Use remote info if available, else fallback to base (installed) info.
-    // This ensures we always show the update in the list, even if we couldn't fetch the new version details.
-    let final_updates = base_updates.into_iter().map(|base| {
-        if let Some(remote) = remote_info.get(&base.name) {
-            remote.clone()
-        } else {
-            base // Fallback: Shows "Update Available" but with old version/time (no diff arrows)
-        }
-    }).collect();
 
-    Ok(final_updates)
+    // If pkg info -r failed to return info for some packages, they won't be in the list.
+    // This is acceptable - we only show updates we can confirm the new version for.
+    Ok(updates)
 }
