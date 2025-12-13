@@ -147,8 +147,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
     let mut remote_info: HashMap<String, PackageInfo> = HashMap::new();
     
     let mut cmd = Command::new("pkg");
-    // OmniOS pkg(1) lacks -H for info; use default header and parse lines.
-    cmd.args(["info", "-r", "-o", "name,fmri"]);
+    // OmniOS pkg(1) lacks -o for info; we must parse verbose output.
+    cmd.args(["info", "-r"]);
     cmd.args(&names);
 
     if let Ok(out) = cmd.output() {
@@ -162,19 +162,23 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
         }
 
         if !out.stdout.is_empty() {
+            let mut current_name = None;
             for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let name = parts[0].to_string();
-                    let fmri = parts[1];
-                    let (_, version, build_time) = parse_fmri(fmri);
-                    
-                    remote_info.insert(name.clone(), PackageInfo {
-                        name,
-                        version,
-                        build_time,
-                        status: "upgrade_available".to_string(),
-                    });
+                let line = line.trim();
+                if let Some(val) = line.strip_prefix("Name: ") {
+                    current_name = Some(val.to_string());
+                } else if let Some(val) = line.strip_prefix("FMRI: ") {
+                    if let Some(name) = current_name.take() {
+                        let fmri = val;
+                        let (_, version, build_time) = parse_fmri(fmri);
+                        
+                        remote_info.insert(name.clone(), PackageInfo {
+                            name,
+                            version,
+                            build_time,
+                            status: "upgrade_available".to_string(),
+                        });
+                    }
                 }
             }
         }

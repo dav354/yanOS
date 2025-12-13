@@ -5,6 +5,7 @@ use axum_csrf::CsrfLayer;
 use opentelemetry::{KeyValue, global, trace::TracerProvider};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+use rustls::crypto::ring;
 use tokio::net::TcpListener;
 use tower_cookies::CookieManagerLayer;
 use tower_http::services::{ServeDir, ServeFile};
@@ -110,6 +111,13 @@ fn init_tracing(event_bus: EventBus, otlp_endpoint: Option<String>) -> Result<()
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    // Ensure rustls has a crypto provider installed (ring feature).
+    if let Err(e) = ring::default_provider().install_default() {
+        return Err(AppError::InternalServerError(format!(
+            "Failed to install rustls crypto provider: {e:?}"
+        )));
+    }
+
     let config = AppConfig::load(DEFAULT_CONFIG_PATH)?;
     let event_bus = EventBus::new(1024);
     init_tracing(event_bus.clone(), config.telemetry.otlp_endpoint.clone())?;

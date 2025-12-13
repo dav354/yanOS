@@ -30,7 +30,7 @@ pub fn routes() -> Router<AppState> {
         (status = 200, description = "API is running", body = StatusResponse)
     )
 )]
-#[instrument]
+#[instrument(skip(session))]
 pub async fn get_status(session: Session) -> Json<StatusResponse> {
     tracing::info!("Responding to API status check");
     let username: Option<String> = session.get("username").await.unwrap_or(None);

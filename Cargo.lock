@@ -1948,6 +1948,7 @@ checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
 dependencies = [
  "aws-lc-rs",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -3401,6 +3402,8 @@ dependencies = [
  "rand 0.8.5",
  "rand_core 0.6.4",
  "rcgen",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "sysinfo",
