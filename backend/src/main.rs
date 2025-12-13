@@ -140,7 +140,7 @@ async fn main() -> Result<(), AppError> {
 
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor(event_bus.clone());
-    let metrics_state = actors::start_metrics_actor(); // Start metrics
+    let metrics_state = actors::start_metrics_actor()?; // Start metrics
 
     let session_store = auth::memory_store();
     let session_layer = auth::create_session_layer(session_store.clone());
@@ -212,14 +212,23 @@ async fn main() -> Result<(), AppError> {
 /// Spawns a separate server to redirect all HTTP traffic to HTTPS.
 async fn redirect_http_to_https() -> Result<(), AppError> {
     let http_addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    let redirect_app = axum::Router::new().fallback(|uri: axum::http::Uri| async move {
-        let new_uri = format!(
-            "https://{}{}",
-            uri.host().unwrap_or("localhost"),
-            uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/")
-        );
-        Redirect::permanent(&new_uri)
-    });
+    let redirect_app = axum::Router::new().fallback(
+        |headers: axum::http::HeaderMap, uri: axum::http::Uri| async move {
+            // Extract host from headers
+            let host = headers
+                .get(axum::http::header::HOST)
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("localhost");
+            // Strip port from host if present, then add HTTPS port
+            let hostname = host.split(':').next().unwrap_or("localhost");
+            let new_uri = format!(
+                "https://{}:8443{}",
+                hostname,
+                uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/")
+            );
+            Redirect::permanent(&new_uri)
+        },
+    );
 
     info!(target: "yanos::redirect", "Redirecting HTTP on {} to HTTPS on 8443", http_addr);
     let listener = TcpListener::bind(http_addr).await.map_err(|e| {
