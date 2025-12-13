@@ -9,11 +9,13 @@ use tokio::net::TcpListener;
 use tower_cookies::CookieManagerLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::{error, info};
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use std::path::PathBuf;
+use tracing_subscriber::{EnvFilter, Registry, layer::{Identity, Layer, SubscriberExt}, util::SubscriberInitExt};
 use tracing_subscriber::fmt::writer::MakeWriter;
 
 use yanos_backend::api::{self, AppState};
 use yanos_backend::auth;
+use yanos_backend::config::{AppConfig, DEFAULT_CONFIG_PATH};
 use yanos_backend::error::AppError;
 use yanos_backend::{actors, events::EventBus, tls, watchers};
 
@@ -45,28 +47,7 @@ impl std::io::Write for BusWriter {
 }
 
 /// Initializes the tracing system with OpenTelemetry.
-fn init_tracing(event_bus: EventBus) -> Result<(), AppError> {
-    let exporter = SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint("http://localhost:4317")
-        .build()
-        .map_err(|e| {
-            AppError::InternalServerError(format!("Failed to build OTLP exporter: {e}"))
-        })?;
-
-    let resource = Resource::builder()
-        .with_attributes([KeyValue::new("service.name", "yanos-backend")])
-        .build();
-
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
-        .with_resource(resource)
-        .build();
-
-    let tracer = provider.tracer("yanos-backend");
-    let _ = global::set_tracer_provider(provider);
-
-    let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+fn init_tracing(event_bus: EventBus, otlp_endpoint: Option<String>) -> Result<(), AppError> {
     // Use JSON formatting for structured logging as per Roadmap 1.1
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(true).json();
     // Mirror logs into EventBus for UI consumption
@@ -81,37 +62,73 @@ fn init_tracing(event_bus: EventBus) -> Result<(), AppError> {
             AppError::InternalServerError(format!("Failed to initialize EnvFilter: {e}"))
         })?;
 
-    Registry::default()
+    let base_subscriber = Registry::default()
         .with(filter_layer)
         .with(fmt_layer)
-        .with(bus_layer)
-        .with(telemetry_layer)
-        .try_init()
-        .map_err(|e| AppError::InternalServerError(format!("Failed to initialize tracing: {e}")))?;
+        .with(bus_layer);
+
+    let telemetry_layer = if let Some(endpoint) = otlp_endpoint {
+        let exporter = SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(endpoint.clone())
+            .build()
+            .map_err(|e| {
+                AppError::InternalServerError(format!("Failed to build OTLP exporter: {e}"))
+            })?;
+
+        let resource = Resource::builder()
+            .with_attributes([KeyValue::new("service.name", "yanos-backend")])
+            .build();
+
+        let provider = SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(resource)
+            .build();
+
+        let tracer = provider.tracer("yanos-backend");
+        let _ = global::set_tracer_provider(provider);
+
+        Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed())
+    } else {
+        tracing::warn!(
+            target: "yanos::telemetry",
+            "OTLP endpoint not configured; OpenTelemetry exporter disabled"
+        );
+        None
+    };
+
+    let subscriber = base_subscriber.with(
+        telemetry_layer.unwrap_or_else(|| Identity::default().boxed()),
+    );
+
+    subscriber.try_init().map_err(|e| {
+        AppError::InternalServerError(format!("Failed to initialize tracing: {e}"))
+    })?;
 
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    let config = AppConfig::load(DEFAULT_CONFIG_PATH)?;
     let event_bus = EventBus::new(1024);
-    init_tracing(event_bus.clone())?;
+    init_tracing(event_bus.clone(), config.telemetry.otlp_endpoint.clone())?;
     let tls_state = tls::TlsState::load(Path::new(tls::DEFAULT_TLS_DIR))
         .await
         .map_err(AppError::from)?;
     tls_state.spawn_reload_task();
 
     // Keep watchers and actors alive for the process lifetime.
-    let _config_watcher = watchers::start_filesystem_watcher(Path::new("/etc"), event_bus.clone())
+    let watched_paths: Vec<PathBuf> = vec![];
+    let _config_watcher = watchers::start_filesystem_watcher(&watched_paths, event_bus.clone())
         .await
         .map_err(|e| AppError::InternalServerError(format!("Watcher failed: {e}")))?;
 
     // Start Axum server
-    let _log_watcher =
-        watchers::start_system_log_watcher(Path::new("/var/adm/messages"), event_bus.clone())
-            .map_err(|e| {
-                AppError::InternalServerError(format!("Failed to start log watcher: {e}"))
-            })?;
+    let _log_watcher = watchers::start_system_log_watcher(
+        Path::new("/var/adm/messages"),
+        event_bus.clone(),
+    )?;
 
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor(event_bus.clone());
@@ -128,6 +145,7 @@ async fn main() -> Result<(), AppError> {
         network_actor.clone(),
         pkg_actor.clone(),
         metrics_state, // Pass metrics state
+        std::path::PathBuf::from(DEFAULT_CONFIG_PATH),
     );
 
     // Spawn daily package update check

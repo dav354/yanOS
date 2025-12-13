@@ -21,6 +21,9 @@ pub use state::AppState;
         routes::logs::list_logs,
         routes::events::stream_events,
         routes::metrics::live_metrics,
+        routes::settings::get_telemetry,
+        routes::settings::update_telemetry,
+        routes::settings::test_telemetry,
         resources::list_network,
         resources::list_packages,
         resources::list_updates,
@@ -35,6 +38,7 @@ pub use state::AppState;
             crate::events::ExternalEvent,
             resources::CreateDatasetRequest,
             resources::CreateDatasetResponse,
+            routes::settings::TelemetrySettings,
             // crate::error::ErrorResponse // If this doesn't exist, we should remove it or define it.
             // Using generic error for now or checking if we can use a local struct.
         )

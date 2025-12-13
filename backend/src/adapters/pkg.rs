@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::process::Command;
 use tracing::warn;
+use std::thread;
+use std::time::Duration;
 
 use crate::core::PackageInfo;
 use crate::error::AppError;
@@ -37,37 +39,53 @@ pub fn refresh_catalog() -> Result<(), AppError> {
 }
 
 pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
-    let output = Command::new("pkg").args(["list", "-Hv"]).output();
-    if let Ok(out) = output {
-        if out.status.success() {
-            let parsed = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .filter_map(|line| {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 1 {
-                        let (name, version, build_time) = parse_fmri(parts[0]);
-                        Some(PackageInfo {
-                            name,
-                            version,
-                            build_time,
-                            status: parts.get(1).unwrap_or(&"unknown").to_string(),
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            return Ok(parsed);
+    for attempt in 1..=3 {
+        let output = Command::new("pkg").args(["list", "-Hv"]).output();
+        match output {
+            Ok(out) if out.status.success() => {
+                let parsed = String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .filter_map(|line| {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 1 {
+                            let (name, version, build_time) = parse_fmri(parts[0]);
+                            Some(PackageInfo {
+                                name,
+                                version,
+                                build_time,
+                                status: parts.get(1).unwrap_or(&"unknown").to_string(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                return Ok(parsed);
+            }
+            Ok(out) => {
+                warn!(
+                    target: "zos::pkg_adapter",
+                    code = ?out.status.code(),
+                    "pkg list failed (attempt {attempt})"
+                );
+            }
+            Err(err) => {
+                warn!(
+                    target: "zos::pkg_adapter",
+                    error = ?err,
+                    "pkg list execution failed (attempt {attempt})"
+                );
+            }
+        }
+
+        if attempt < 3 {
+            thread::sleep(Duration::from_millis(250));
         }
     }
 
-    // Fallback when pkg is unavailable (e.g., dev hosts)
-    Ok(vec![PackageInfo {
-        name: "system/library".to_string(),
-        version: "unknown".to_string(),
-        build_time: "unknown".to_string(),
-        status: "unknown".to_string(),
-    }])
+    Err(AppError::ServiceUnavailable(
+        "Failed to list packages via pkg".to_string(),
+    ))
 }
 
 pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
@@ -78,8 +96,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
     let mut base_updates: Vec<PackageInfo> = Vec::new();
     let mut names: Vec<String> = Vec::new();
 
-    if let Ok(out) = list_output {
-        if out.status.success() {
+    match list_output {
+        Ok(out) if out.status.success() => {
             for line in String::from_utf8_lossy(&out.stdout).lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
@@ -97,6 +115,27 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                 }
             }
         }
+        Ok(out) => {
+            warn!(
+                target: "zos::pkg_adapter",
+                code = ?out.status.code(),
+                stderr = %String::from_utf8_lossy(&out.stderr),
+                "pkg list -u failed"
+            );
+            return Err(AppError::ServiceUnavailable(
+                "Failed to query pkg updates".to_string(),
+            ));
+        }
+        Err(err) => {
+            warn!(
+                target: "zos::pkg_adapter",
+                error = ?err,
+                "pkg list -u execution failed"
+            );
+            return Err(AppError::ServiceUnavailable(
+                "Failed to query pkg updates".to_string(),
+            ));
+        }
     }
 
     if names.is_empty() {
@@ -108,7 +147,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
     let mut remote_info: HashMap<String, PackageInfo> = HashMap::new();
     
     let mut cmd = Command::new("pkg");
-    cmd.args(["info", "-rH", "-o", "name,fmri"]);
+    // OmniOS pkg(1) lacks -H for info; use default header and parse lines.
+    cmd.args(["info", "-r", "-o", "name,fmri"]);
     cmd.args(&names);
 
     if let Ok(out) = cmd.output() {

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tracing::{error, info};
@@ -7,10 +7,13 @@ use crate::events::{EventBus, ExternalEvent};
 
 /// Starts a blocking filesystem watcher on the given path and forwards events into the broadcast bus.
 pub async fn start_filesystem_watcher(
-    path: &Path,
+    paths: &[PathBuf],
     bus: EventBus,
-) -> notify::Result<RecommendedWatcher> {
-    let path = path.to_path_buf();
+) -> notify::Result<Option<RecommendedWatcher>> {
+    if paths.is_empty() {
+        info!(target: "yanos::watcher", "Filesystem watcher disabled (no paths configured)");
+        return Ok(None);
+    }
 
     // notify requires a blocking callback; we forward into the async channel.
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| match res {
@@ -31,7 +34,10 @@ pub async fn start_filesystem_watcher(
         }
     })?;
 
-    watcher.watch(&path, RecursiveMode::Recursive)?;
+    for path in paths {
+        watcher.watch(Path::new(path), RecursiveMode::NonRecursive)?;
+        info!(target: "yanos::watcher", path = %path.display(), "Watching path");
+    }
 
-    Ok(watcher)
+    Ok(Some(watcher))
 }

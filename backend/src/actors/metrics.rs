@@ -1,13 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::io;
-use std::process::Command;
 use std::sync::Arc;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, Networks, RefreshKind, System};
 use tokio::sync::{RwLock, broadcast, mpsc};
-use tokio::task::spawn_blocking;
 use tokio::time::{Duration, interval};
 use tracing::{info, warn};
+
+use crate::adapters;
 
 // --- Data Structures ---
 
@@ -189,28 +188,27 @@ impl MetricsActor {
     }
 
     async fn read_arc_size_bytes(&mut self) -> u64 {
-        match spawn_blocking(read_arc_size_blocking).await {
-            Ok(Ok(size)) => size,
-            Ok(Err(err)) => {
+        match adapters::kstat::read_arc_size_bytes() {
+            Ok(size) => size,
+            Err(err) => {
                 if !self.arc_warned {
                     match err {
-                        ArcReadError::Io(e) => {
-                            warn!(target: "yanos::metrics", error = ?e, "I/O error reading ARC size from kstat; reporting 0");
+                        adapters::kstat::KstatError::Open(e) => {
+                            warn!(target: "yanos::metrics", error = ?e, "Failed to open kstat for ARC; reporting 0");
                         }
-                        ArcReadError::Status(status) => {
-                            warn!(target: "yanos::metrics", status = ?status, "kstat returned non-zero status; reporting 0");
+                        adapters::kstat::KstatError::Lookup(name) => {
+                            warn!(target: "yanos::metrics", entry = %name, "Failed to locate kstat entry for ARC; reporting 0");
                         }
-                        ArcReadError::MissingValue => {
+                        adapters::kstat::KstatError::Read(e) => {
+                            warn!(target: "yanos::metrics", error = ?e, "Failed to read kstat ARC stats; reporting 0");
+                        }
+                        adapters::kstat::KstatError::MissingValue => {
                             warn!(target: "yanos::metrics", "ARC size missing from kstat output; reporting 0");
                         }
+                        adapters::kstat::KstatError::TypeMismatch(t) => {
+                            warn!(target: "yanos::metrics", data_type = t, "Unexpected kstat data type for ARC size; reporting 0");
+                        }
                     }
-                    self.arc_warned = true;
-                }
-                0
-            }
-            Err(join_error) => {
-                if !self.arc_warned {
-                    warn!(target: "yanos::metrics", error = ?join_error, "Join error while reading ARC size; reporting 0");
                     self.arc_warned = true;
                 }
                 0
@@ -233,28 +231,4 @@ pub fn start_metrics_actor() -> Arc<MetricsState> {
         history,
         command_tx,
     })
-}
-
-#[derive(Debug)]
-enum ArcReadError {
-    Io(io::Error),
-    Status(Option<i32>),
-    MissingValue,
-}
-
-fn read_arc_size_blocking() -> Result<u64, ArcReadError> {
-    let output = Command::new("kstat")
-        .args(["-p", "zfs:0:arcstats:size"])
-        .output()
-        .map_err(ArcReadError::Io)?;
-
-    if !output.status.success() {
-        return Err(ArcReadError::Status(output.status.code()));
-    }
-
-    String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .last()
-        .and_then(|v| v.parse::<u64>().ok())
-        .ok_or(ArcReadError::MissingValue)
 }

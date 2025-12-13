@@ -10,6 +10,7 @@ pub mod metrics;
 pub mod resources;
 pub mod status;
 pub mod terminal; // Add terminal module
+pub mod settings;
 
 // Re-export handlers needed for Utoipa documentation in api/mod.rs
 pub use health::{healthz, readyz};
@@ -23,6 +24,7 @@ pub fn mod_routes() -> Router<AppState> {
         .route("/metrics/live", get(metrics::live_metrics))
         .route("/logs", get(logs::list_logs))
         .route("/terminal", get(terminal::ws_handler)) // Add terminal route
+        .merge(settings::routes())
         .route_layer(middleware::from_fn(auth::auth_guard));
 
     Router::<AppState>::new()

@@ -1,6 +1,7 @@
 use axum::extract::FromRef;
 use axum_csrf::CsrfConfig;
 use std::sync::Arc;
+use std::path::PathBuf;
 
 use crate::actors::{MetricsState, NetworkActorHandle, PkgActorHandle}; // Import Commands
 use crate::auth::DynSessionStore;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub network_actor: NetworkActorHandle,
     pub pkg_actor: PkgActorHandle,
     pub metrics_state: Arc<MetricsState>,
+    pub config_path: PathBuf,
 }
 
 impl AppState {
@@ -27,6 +29,7 @@ impl AppState {
         network_actor: NetworkActorHandle,
         pkg_actor: PkgActorHandle,
         metrics_state: Arc<MetricsState>,
+        config_path: PathBuf,
     ) -> Self {
         Self {
             csrf_config,
@@ -36,6 +39,7 @@ impl AppState {
             network_actor,
             pkg_actor,
             metrics_state,
+            config_path,
         }
     }
 }
