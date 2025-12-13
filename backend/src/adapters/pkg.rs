@@ -11,11 +11,18 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
                 .lines()
                 .filter_map(|line| {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 {
+                    if parts.len() >= 1 {
+                        // Parse FMRI: pkg://publisher/category/component@version:timestamp
+                        // Example: pkg://omnios/developer/gnu-binutils@2.45-151056.0:20251023T162124Z
+                        let fmri = parts[0];
+                        let (name, rest) = fmri.split_once('@').unwrap_or((fmri, ""));
+                        let (version, build_time) = rest.split_once(':').unwrap_or((rest, ""));
+
                         Some(PackageInfo {
-                            name: parts[0].to_string(),
-                            version: parts[1].to_string(),
-                            status: "installed".to_string(),
+                            name: name.to_string(),
+                            version: version.to_string(),
+                            build_time: build_time.to_string(),
+                            status: parts.get(1).unwrap_or(&"unknown").to_string(),
                         })
                     } else {
                         None
@@ -30,6 +37,7 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
     Ok(vec![PackageInfo {
         name: "system/library".to_string(),
         version: "unknown".to_string(),
+        build_time: "unknown".to_string(),
         status: "unknown".to_string(),
     }])
 }

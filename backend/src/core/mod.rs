@@ -20,5 +20,6 @@ pub struct NetworkInterface {
 pub struct PackageInfo {
     pub name: String,
     pub version: String,
+    pub build_time: String,
     pub status: String,
 }
