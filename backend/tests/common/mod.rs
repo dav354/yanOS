@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use axum::Router;
 use http_body_util::BodyExt;
+use std::sync::Once;
 use tempfile::{TempDir, tempdir};
 use tower_sessions::SessionStore;
 use tower_sessions_core::session::{Id, Record};
@@ -9,8 +10,17 @@ use tower_sessions_core::session_store;
 use serde_json::Value;
 use yanos_backend::{actors, api, auth, events::EventBus, tls};
 
+static CRYPTO_INIT: Once = Once::new();
+
+fn init_crypto() {
+    CRYPTO_INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 /// Build a test app with temporary session key and TLS material.
 pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
+    init_crypto();
     let temp_dir_session = tempdir().expect("Failed to create temporary directory for session key");
     let session_key_path = temp_dir_session.path().join("session.key");
 
@@ -27,8 +37,10 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
 
     let event_bus = EventBus::new(8);
     let network_actor = actors::start_network_actor();
-    let pkg_actor = actors::start_pkg_actor();
+    let pkg_actor = actors::start_pkg_actor(event_bus.clone());
     let metrics_state = actors::start_metrics_actor().expect("Failed to start metrics actor");
+
+    let config_path = temp_dir_session.path().join("config.json");
 
     let app_state = api::AppState::new(
         csrf_config.clone(),
@@ -38,6 +50,7 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
         network_actor,
         pkg_actor,
         metrics_state,
+        config_path,
     );
 
     let shared_state = app_state.clone();

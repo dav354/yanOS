@@ -28,6 +28,11 @@ deploy-frontend: build-frontend
 # Full Deploy
 deploy: deploy-frontend deploy-backend
 
+# Run backend tests on VM
+test:
+    rsync -avz --delete --exclude 'target' backend/ {{ vmConnection }}:{{ backendDir }}
+    ssh -t {{ vmConnection }} "cd {{ backendDir }} && LD_LIBRARY_PATH=/opt/ooce/llvm-21/lib:\$LD_LIBRARY_PATH /opt/ooce/bin/cargo test --color=always"
+
 # Clean all build artifacts
 clean:
     cd backend && cargo clean

@@ -46,7 +46,7 @@ async fn test_readyz_when_tls_present() {
 
 #[tokio::test]
 async fn test_readyz_fails_when_session_store_is_unhealthy() {
-    let (_, app_state, _, _) = common::create_test_app().await;
+    let (_, app_state, temp_dir_session, _) = common::create_test_app().await;
     let failing_store = auth::DynSessionStore::new(common::FailingStore);
 
     let new_app_state_for_test = api::AppState::new(
@@ -57,6 +57,7 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
         app_state.network_actor.clone(),
         app_state.pkg_actor.clone(),
         app_state.metrics_state.clone(),
+        temp_dir_session.path().join("config.json"),
     );
     let app_with_failing_session = api::create_router().with_state(new_app_state_for_test);
 

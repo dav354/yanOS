@@ -16,7 +16,7 @@ pub struct NetworkInterface {
     pub address: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PackageInfo {
     pub name: String,
     pub version: String,
