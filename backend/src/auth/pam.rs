@@ -117,6 +117,14 @@ pub async fn login_handler(
     session: Session,
     Json(payload): Json<LoginPayload>,
 ) -> Result<Json<&'static str>, AppError> {
+    // Early validation: reject empty or whitespace-only credentials
+    // This avoids hitting PAM which can be slow for invalid inputs
+    if payload.username.trim().is_empty() || payload.password.is_empty() {
+        return Err(AppError::Unauthorized(
+            "Invalid credentials".to_string(),
+        ));
+    }
+
     info!(username = %payload.username, "Attempting to authenticate user");
 
     authenticate(payload.username.clone(), payload.password.clone()).await?;
@@ -149,6 +157,16 @@ pub async fn logout_handler(session: Session) -> Result<Json<&'static str>, AppE
 
 /// Authenticates a user against the configured PAM stack.
 pub async fn authenticate(username: String, password: String) -> Result<(), AppError> {
+    // Early validation to avoid slow PAM lookups for invalid inputs
+    if username.trim().is_empty() || password.is_empty() {
+        return Err(AppError::Unauthorized("Invalid credentials".to_string()));
+    }
+
+    // Reject overly long usernames (max 256 chars) to avoid PAM issues
+    if username.len() > 256 {
+        return Err(AppError::Unauthorized("Invalid credentials".to_string()));
+    }
+
     let result = tokio::task::spawn_blocking(move || {
         // Default to the dedicated "yanos" PAM stack so we can avoid TTY-dependent modules.
         let service_name = std::env::var("PAM_SERVICE_NAME").unwrap_or_else(|_| "yanos".to_string());

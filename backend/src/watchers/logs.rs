@@ -17,11 +17,29 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::Duration;
 
 use tracing::{error, info};
 
 use crate::events::{EventBus, ExternalEvent};
+
+/// Handle for controlling the log watcher task.
+pub struct LogWatcherHandle {
+    handle: tokio::task::JoinHandle<()>,
+    shutdown: Arc<AtomicBool>,
+}
+
+impl LogWatcherHandle {
+    /// Aborts the log watcher task.
+    pub fn abort(&self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+        self.handle.abort();
+    }
+}
 
 /// Starts a background task that tails a log file and publishes to the event bus.
 ///
@@ -30,11 +48,11 @@ use crate::events::{EventBus, ExternalEvent};
 /// * `bus` - EventBus to publish SystemLog events to
 ///
 /// # Returns
-/// JoinHandle for the blocking task, or error if file cannot be opened.
+/// LogWatcherHandle for the blocking task, or error if file cannot be opened.
 pub fn start_system_log_watcher(
     path: &Path,
     bus: EventBus,
-) -> Result<tokio::task::JoinHandle<()>, crate::error::AppError> {
+) -> Result<LogWatcherHandle, crate::error::AppError> {
     let path = path.to_path_buf();
     let log_path = path.clone();
 
@@ -66,13 +84,16 @@ pub fn start_system_log_watcher(
         ))
     })?;
 
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_clone = shutdown.clone();
+
     let handle = tokio::task::spawn_blocking(move || {
         let sleep = Duration::from_millis(500);
         let retry_delay = Duration::from_secs(2);
         let mut first_run = true;
         let mut current_file = Some(file);
 
-        loop {
+        while !shutdown_clone.load(Ordering::Relaxed) {
             let file_handle = match current_file.take() {
                 Some(f) => f,
                 None => match File::open(&path) {
@@ -93,6 +114,9 @@ pub fn start_system_log_watcher(
                 let mut preload: VecDeque<String> = VecDeque::with_capacity(preload_limit);
                 let mut buf = String::new();
                 loop {
+                    if shutdown_clone.load(Ordering::Relaxed) {
+                        return;
+                    }
                     buf.clear();
                     match reader.read_line(&mut buf) {
                         Ok(0) => break,
@@ -125,6 +149,9 @@ pub fn start_system_log_watcher(
 
             let mut buf = String::new();
             loop {
+                if shutdown_clone.load(Ordering::Relaxed) {
+                    return;
+                }
                 buf.clear();
                 match reader.read_line(&mut buf) {
                     Ok(0) => {
@@ -139,7 +166,7 @@ pub fn start_system_log_watcher(
                     }
                     Err(e) => {
                         error!(target: "yanos::logs", error = ?e, path = ?path, "Error reading log file, retrying");
-                        break;
+                        break; // Break inner loop to reopen/retry
                     }
                 }
             }
@@ -149,5 +176,5 @@ pub fn start_system_log_watcher(
     });
 
     info!(target: "yanos::logs", path = ?log_path, "System log watcher started");
-    Ok(handle)
+    Ok(LogWatcherHandle { handle, shutdown })
 }
