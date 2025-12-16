@@ -22,7 +22,7 @@ pub async fn start_filesystem_watcher(
                 event.kind,
                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
             ) {
-                let target = event.paths.get(0).cloned();
+                let target = event.paths.first().cloned();
                 if let Some(p) = target {
                     bus.publish(ExternalEvent::ConfigChanged { path: p.clone() });
                     info!(target: "yanos::watcher", path = ?p, "External config change detected");
@@ -34,10 +34,38 @@ pub async fn start_filesystem_watcher(
         }
     })?;
 
+    let mut watched_any = false;
+
     for path in paths {
-        watcher.watch(Path::new(path), RecursiveMode::NonRecursive)?;
-        info!(target: "yanos::watcher", path = %path.display(), "Watching path");
+        if !path.exists() {
+            info!(
+                target: "yanos::watcher",
+                path = %path.display(),
+                "Skipping watch (path does not exist)"
+            );
+            continue;
+        }
+
+        match watcher.watch(Path::new(path), RecursiveMode::NonRecursive) {
+            Ok(_) => {
+                watched_any = true;
+                info!(target: "yanos::watcher", path = %path.display(), "Watching path");
+            }
+            Err(err) => {
+                error!(
+                    target: "yanos::watcher",
+                    path = %path.display(),
+                    error = ?err,
+                    "Failed to watch path"
+                );
+            }
+        }
     }
 
-    Ok(Some(watcher))
+    if watched_any {
+        Ok(Some(watcher))
+    } else {
+        info!(target: "yanos::watcher", "No existing paths to watch; watcher disabled");
+        Ok(None)
+    }
 }

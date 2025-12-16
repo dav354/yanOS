@@ -43,19 +43,17 @@ async fn handle_socket(socket: WebSocket, event_bus: EventBus) {
     let send_task = tokio::spawn(async move {
         // send recent snapshot first
         for entry in event_bus.snapshot(200) {
-            if let Ok(msg) = serde_json::to_string(&entry) {
-                if sender.send(Message::Text(msg.into())).await.is_err() {
+            if let Ok(msg) = serde_json::to_string(&entry)
+                && sender.send(Message::Text(msg.into())).await.is_err() {
                     return;
                 }
-            }
         }
 
         while let Ok(event) = rx.recv().await {
-            if let Ok(msg) = serde_json::to_string(&event) {
-                if sender.send(Message::Text(msg.into())).await.is_err() {
+            if let Ok(msg) = serde_json::to_string(&event)
+                && sender.send(Message::Text(msg.into())).await.is_err() {
                     break;
                 }
-            }
         }
     });
 

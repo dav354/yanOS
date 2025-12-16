@@ -58,7 +58,7 @@ impl PkgActorHandle {
             .send(PkgMessage::GetUpdates { resp })
             .await
             .map_err(|e| AppError::ServiceUnavailable(format!("Pkg actor unavailable: {e}")))?;
-        Ok(rx.await.map_err(|e| AppError::InternalServerError(format!("Actor closed: {e}")))?)
+        rx.await.map_err(|e| AppError::InternalServerError(format!("Actor closed: {e}")))
     }
 }
 

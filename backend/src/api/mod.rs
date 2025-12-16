@@ -2,7 +2,7 @@ use axum::Router;
 use utoipa::{Modify, OpenApi};
 use utoipa_swagger_ui::{Config, SwaggerUi};
 // Route handlers need to be public for utoipa macro to see them
-pub use crate::api::routes::{health, resources, status};
+pub use crate::api::routes::{health, network, resources, status};
 
 pub mod routes;
 pub mod state;
@@ -25,11 +25,19 @@ pub use state::AppState;
         routes::terminal::ws_handler,
         routes::settings::get_telemetry,
         routes::settings::update_telemetry,
-        resources::list_network,
+        // Network routes
+        network::list_interfaces,
+        network::list_links,
+        network::get_config,
+        network::update_config,
+        network::set_address,
+        network::set_dhcp,
+        // Package routes
         resources::list_packages,
         resources::list_updates,
         resources::check_updates,
         resources::create_dataset,
+        // Storage routes
         routes::storage::list_pools,
         routes::storage::get_pool,
         routes::storage::list_datasets,
@@ -46,12 +54,20 @@ pub use state::AppState;
             routes::settings::TelemetrySettings,
             crate::adapters::zfs::PoolInfo,
             crate::adapters::zfs::DatasetInfo,
+            // Network schemas
+            crate::core::NetworkInterface,
+            crate::core::PhysicalLink,
+            crate::core::NetworkConfig,
+            network::SetAddressRequest,
+            network::UpdateConfigRequest,
+            network::SuccessResponse,
         )
     ),
     modifiers(&SecurityAddon),
     tags(
         (name = "yanos", description = "yanOS Management API"),
-        (name = "storage", description = "ZFS Storage Management")
+        (name = "storage", description = "ZFS Storage Management"),
+        (name = "network", description = "Network Configuration")
     )
 )]
 struct ApiDoc;

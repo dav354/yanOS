@@ -1,7 +1,7 @@
 use axum::{
-    Json, Router,
     extract::State,
     routing::{get, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,29 +24,10 @@ pub struct CreateDatasetResponse {
 
 pub fn routes() -> Router<AppState> {
     Router::<AppState>::new()
-        .route("/network/interfaces", get(list_network))
         .route("/pkg/list", get(list_packages))
         .route("/pkg/updates", get(list_updates))
         .route("/pkg/updates/check", post(check_updates))
         .route("/storage/dataset", post(create_dataset))
-}
-
-/// List network interfaces (via NetworkActor).
-#[utoipa::path(
-    get,
-    path = "/api/v1/network/interfaces",
-    tag = "resources",
-    responses(
-        (status = 200, description = "Network interfaces", body = [Value])
-    )
-)]
-#[instrument(skip(state))]
-pub async fn list_network(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
-    let interfaces = state.network_actor.list_interfaces().await?;
-    let value = serde_json::to_value(&interfaces).map_err(|e| {
-        AppError::InternalServerError(format!("Failed to serialize interfaces: {e}"))
-    })?;
-    Ok(Json(value))
 }
 
 /// Trigger a manual check for package updates.

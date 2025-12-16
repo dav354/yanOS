@@ -46,7 +46,7 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
                     .lines()
                     .filter_map(|line| {
                         let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 1 {
+                        if !parts.is_empty() {
                             let (name, version, build_time) = parse_fmri(parts[0]);
                             Some(PackageInfo {
                                 name,
@@ -162,8 +162,8 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                 let line = line.trim();
                 if let Some(val) = line.strip_prefix("Name: ") {
                     current_name = Some(val.to_string());
-                } else if let Some(val) = line.strip_prefix("FMRI: ") {
-                    if let Some(name) = current_name.take() {
+                } else if let Some(val) = line.strip_prefix("FMRI: ")
+                    && let Some(name) = current_name.take() {
                         let fmri = val;
                         let (_, version, build_time) = parse_fmri(fmri);
 
@@ -174,7 +174,6 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                             status: "upgrade_available".to_string(),
                         });
                     }
-                }
             }
         }
     }

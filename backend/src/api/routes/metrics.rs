@@ -40,21 +40,18 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<MetricsState>) {
     };
 
     // Send history as a single batch
-    if !history.is_empty() {
-        if let Ok(json) = serde_json::to_string(&history) {
-            if socket.send(Message::Text(json.into())).await.is_err() {
+    if !history.is_empty()
+        && let Ok(json) = serde_json::to_string(&history)
+            && socket.send(Message::Text(json.into())).await.is_err() {
                 return;
             }
-        }
-    }
 
     let mut rx = state.broadcast_tx.subscribe();
 
     while let Ok(msg) = rx.recv().await {
-        if let Ok(json) = serde_json::to_string(&msg) {
-            if socket.send(Message::Text(json.into())).await.is_err() {
+        if let Ok(json) = serde_json::to_string(&msg)
+            && socket.send(Message::Text(json.into())).await.is_err() {
                 break;
             }
-        }
     }
 }

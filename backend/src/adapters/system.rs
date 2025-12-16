@@ -9,8 +9,7 @@ pub fn get_hostname() -> Result<String, std::io::Error> {
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string()))?;
         Ok(raw.trim().to_string())
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Err(std::io::Error::other(
             "Failed to get hostname",
         ))
     }

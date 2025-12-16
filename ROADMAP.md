@@ -48,10 +48,10 @@
 
 ### 2.1 Reconciliation & Actors
 
-- [ ] **File Watchers:** Implement `notify` crate to watch `/etc/` for external changes.
-- [ ] **Global State Sync:** Mechanism to push "External Change Detected" events to the UI via WebSocket.
+- [x] **File Watchers:** Implement `notify` crate to watch `/etc/` for external changes.
+- [x] **Global State Sync:** Push "External Change Detected" events to the UI via WebSocket (`/api/v1/events`).
 - [x] **PkgActor:** Create an Actor to serialize package operations (prevent parallel updates).
-- [ ] **NetworkActor:** Create an Actor to serialize `ipadm`/`dladm` calls.
+- [x] **NetworkActor:** Actor to serialize `ipadm`/`dladm` calls (read implemented, write stubbed).
 - [ ] **SMF/ZFS Polling:** Periodically poll `svcs -H`/`svcs -xv` for managed FMRIs and `zpool status`/`zpool list` to detect external changes; feed results into actor messages.
 
 ### 2.2 The Lifesaver: Secure Web Shell
@@ -64,13 +64,12 @@
 
 ### 2.3 Dashboard & Metrics
 
-- [ ] **System Info:** Read Hostname, Kernel, Uptime.
-- [ ] **Live Metrics:** Push CPU/RAM usage via WSS
-- [ ] **UI:** Svelte 5 Runes-based dashboard components.
-- [ ] **Metrics Endpoint:** Expose `/metrics` in Prometheus format alongside tracing/OTel exporters.
+- [x] **System Info:** Read Hostname, Kernel, Uptime.
+- [x] **Live Metrics:** Push CPU/RAM usage via WSS.
+- [x] **UI:** Svelte 5 Runes-based dashboard components.
 - [x] **Internationalization:** Define message catalogs (default en-US), add locale switcher, and wire locale negotiation/fallback early in the UI/API.
 - [x] **Themes:** Establish multiple UI themes (e.g., light/high-contrast/dark) with a toggle and persisted preference.
-- [ ] **Telemetry Collector:** Optionally ship otelcol/Alloy to receive OTLP and forward traces/logs/metrics; configure endpoints in Settings (no Prometheus scrape requirement).
+- [ ] **Telemetry Collector:** Optionally ship otelcol/Alloy to receive OTLP and forward traces/logs/metrics; configure endpoints in Settings.
 
 ### 2.4 Lifecycle & Safe Updates
 
@@ -86,8 +85,14 @@
 
 ### 2.5 Network Manager
 
-- [ ] **Read:** Parse `dladm show-phys` and `ipadm show-addr`.
-- [ ] **Write (NetworkActor):** Change IPs, Gateway, DNS (`/etc/resolv.conf`), mtu
+- [x] **Read:** Parse `ipadm show-addr` for interface listing.
+- [x] **Read:** Parse `dladm show-phys` for physical link info (speed, MAC, MTU).
+- [x] **Read:** Parse `/etc/resolv.conf` for DNS servers and search domains.
+- [x] **Read:** Parse `/etc/defaultrouter` for gateway.
+- [x] **Write (NetworkActor):** Set static IP, enable DHCP, update DNS, update gateway.
+- [x] **UI:** Network configuration page with per-interface editing.
+- [ ] **Write:** MTU configuration.
+- [ ] **Future:** VLAN and bond/aggregation support.
 
 ---
 
@@ -97,10 +102,10 @@
 
 ### 3.1 Architecture: ZFS Actor
 
-- [ ] **Actor Setup:** `ZfsActor` receiving messages (`CreatePool`, `Scrub`, `SetProp`).
-- [ ] **Serialization:** Ensure ZFS commands are processed sequentially to avoid race conditions.
+- [x] **Actor Setup:** `ZfsActor` receiving messages (`ListPools`, `GetPool`, `ListDatasets`, `GetDataset`).
+- [x] **Serialization:** Ensure ZFS commands are processed sequentially to avoid race conditions.
 - [ ] **Polling:** Background task to periodically poll `zpool status` and detect external CLI changes.
-- [ ] **FFI Plan:** Start with CLI parsing; migrate hot paths to `libzfs`/`libbe` FFI once correctness is validated.
+- [x] **FFI:** Direct `libzfs` FFI bindings for pool/dataset operations (no CLI parsing).
 
 ### 3.2 Observability: DTrace (USDT)
 
@@ -114,14 +119,15 @@
 
 ### 3.4 Pool Management
 
-- [ ] **Read:** Parse `zpool status`/`list`.
+- [x] **Read:** List pools and get pool info via libzfs FFI.
 - [ ] **Write:** Wizard for Stripe, Mirror, RAIDZ1/2/3.
 - [ ] **Actions:** Scrub, Export, Import.
 
 ### 3.5 Dataset Management
 
-- [ ] **Hierarchy:** Tree view of datasets.
-- [ ] **Properties:** Compression, Quota, Mountpoints.
+- [x] **Read:** List datasets and get dataset info via libzfs FFI.
+- [ ] **Hierarchy:** Tree view of datasets in UI.
+- [ ] **Properties:** Compression, Quota, Mountpoints (write).
 
 ---
 
@@ -193,5 +199,4 @@
 - [ ] **Security Audit:** Verify permissions, port exposure, and Cookie attributes.
 - [ ] **UX Polish:** Dark Mode, Mobile Responsiveness, Loading States.
 - [ ] **Documentation:** README, API Docs, User Guide.
-- [ ] **Internationalization:** Add i18n message catalogs (default en-US), language switcher in the UI, and locale negotiation/fallback in the API responses.
 - [ ] **HA Readiness:** Keep API stateless and reconciliation idempotent to allow future active/passive clustering on shared storage.

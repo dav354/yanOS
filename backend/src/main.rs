@@ -87,7 +87,7 @@ fn init_tracing(event_bus: EventBus, otlp_endpoint: Option<String>) -> Result<()
             .build();
 
         let tracer = provider.tracer("yanos-backend");
-        let _ = global::set_tracer_provider(provider);
+        global::set_tracer_provider(provider);
 
         Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed())
     } else {
@@ -127,10 +127,18 @@ async fn main() -> Result<(), AppError> {
     tls_state.spawn_reload_task();
 
     // Keep watchers and actors alive for the process lifetime.
-    let watched_paths: Vec<PathBuf> = vec![];
+    let watched_paths: Vec<PathBuf> = vec![
+        PathBuf::from("/etc/resolv.conf"),
+        PathBuf::from("/etc/defaultrouter"),
+        PathBuf::from("/etc/nodename"),
+    ];
     let _config_watcher = watchers::start_filesystem_watcher(&watched_paths, event_bus.clone())
         .await
         .map_err(|e| AppError::InternalServerError(format!("Watcher failed: {e}")))?;
+
+    // Network sysevent watcher
+    let _network_watcher =
+        watchers::start_network_event_watcher(event_bus.clone())?;
 
     // Start Axum server
     let _log_watcher = watchers::start_system_log_watcher(

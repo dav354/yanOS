@@ -76,7 +76,7 @@ pub fn start_system_log_watcher(
 
     let file = first_file.ok_or_else(|| {
         let err = last_err
-            .unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "unknown log error"));
+            .unwrap_or_else(|| std::io::Error::other("unknown log error"));
         crate::error::AppError::ServiceUnavailable(format!(
             "Failed to open system log file {}: {}",
             path.display(),
