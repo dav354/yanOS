@@ -38,6 +38,7 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
     let event_bus = EventBus::new(8);
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor(event_bus.clone());
+    let zfs_actor = actors::start_zfs_actor().expect("Failed to start ZFS actor");
     let metrics_state = actors::start_metrics_actor().expect("Failed to start metrics actor");
 
     let config_path = temp_dir_session.path().join("config.json");
@@ -49,6 +50,7 @@ pub async fn create_test_app() -> (Router, api::AppState, TempDir, TempDir) {
         event_bus,
         network_actor,
         pkg_actor,
+        zfs_actor,
         metrics_state,
         config_path,
     );

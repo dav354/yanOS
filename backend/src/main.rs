@@ -140,7 +140,8 @@ async fn main() -> Result<(), AppError> {
 
     let network_actor = actors::start_network_actor();
     let pkg_actor = actors::start_pkg_actor(event_bus.clone());
-    let metrics_state = actors::start_metrics_actor()?; // Start metrics
+    let zfs_actor = actors::start_zfs_actor()?;
+    let metrics_state = actors::start_metrics_actor()?;
 
     let session_store = auth::memory_store();
     let session_layer = auth::create_session_layer(session_store.clone());
@@ -152,7 +153,8 @@ async fn main() -> Result<(), AppError> {
         event_bus.clone(),
         network_actor.clone(),
         pkg_actor.clone(),
-        metrics_state, // Pass metrics state
+        zfs_actor,
+        metrics_state,
         std::path::PathBuf::from(DEFAULT_CONFIG_PATH),
     );
 

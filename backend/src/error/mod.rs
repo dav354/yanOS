@@ -90,3 +90,25 @@ impl From<std::io::Error> for AppError {
         AppError::IoError(err)
     }
 }
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::InternalServerError(msg) => write!(f, "Internal server error: {}", msg),
+            AppError::IoError(err) => write!(f, "I/O error: {}", err),
+            AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
+            AppError::ServiceUnavailable(msg) => write!(f, "Service unavailable: {}", msg),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
+            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for AppError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            AppError::IoError(err) => Some(err),
+            _ => None,
+        }
+    }
+}

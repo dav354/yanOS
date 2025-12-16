@@ -1,9 +1,9 @@
 use axum::extract::FromRef;
 use axum_csrf::CsrfConfig;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::actors::{MetricsState, NetworkActorHandle, PkgActorHandle}; // Import Commands
+use crate::actors::{MetricsState, NetworkActorHandle, PkgActorHandle, ZfsActorHandle};
 use crate::auth::DynSessionStore;
 use crate::events::EventBus;
 use crate::tls::TlsState;
@@ -16,11 +16,13 @@ pub struct AppState {
     pub event_bus: EventBus,
     pub network_actor: NetworkActorHandle,
     pub pkg_actor: PkgActorHandle,
+    pub zfs_actor: ZfsActorHandle,
     pub metrics_state: Arc<MetricsState>,
     pub config_path: PathBuf,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         csrf_config: CsrfConfig,
         session_store: DynSessionStore,
@@ -28,6 +30,7 @@ impl AppState {
         event_bus: EventBus,
         network_actor: NetworkActorHandle,
         pkg_actor: PkgActorHandle,
+        zfs_actor: ZfsActorHandle,
         metrics_state: Arc<MetricsState>,
         config_path: PathBuf,
     ) -> Self {
@@ -38,6 +41,7 @@ impl AppState {
             event_bus,
             network_actor,
             pkg_actor,
+            zfs_actor,
             metrics_state,
             config_path,
         }

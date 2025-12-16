@@ -56,6 +56,7 @@ async fn test_readyz_fails_when_session_store_is_unhealthy() {
         app_state.event_bus.clone(),
         app_state.network_actor.clone(),
         app_state.pkg_actor.clone(),
+        app_state.zfs_actor.clone(),
         app_state.metrics_state.clone(),
         temp_dir_session.path().join("config.json"),
     );

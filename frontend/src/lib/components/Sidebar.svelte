@@ -11,6 +11,7 @@
 
     const links = [
         { key: 'nav.dashboard', href: '/' },
+        { key: 'nav.storage', href: '/storage' },
         { key: 'nav.network', href: '/network' },
         { key: 'nav.terminal', href: '/terminal' },
         { key: 'nav.packages', href: '/packages' },

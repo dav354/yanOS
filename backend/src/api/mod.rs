@@ -30,6 +30,10 @@ pub use state::AppState;
         resources::list_updates,
         resources::check_updates,
         resources::create_dataset,
+        routes::storage::list_pools,
+        routes::storage::get_pool,
+        routes::storage::list_datasets,
+        routes::storage::get_dataset,
     ),
     components(
         schemas(
@@ -40,13 +44,14 @@ pub use state::AppState;
             resources::CreateDatasetRequest,
             resources::CreateDatasetResponse,
             routes::settings::TelemetrySettings,
-            // crate::error::ErrorResponse // If this doesn't exist, we should remove it or define it.
-            // Using generic error for now or checking if we can use a local struct.
+            crate::adapters::zfs::PoolInfo,
+            crate::adapters::zfs::DatasetInfo,
         )
     ),
     modifiers(&SecurityAddon),
     tags(
-        (name = "yanos", description = "yanOS Management API")
+        (name = "yanos", description = "yanOS Management API"),
+        (name = "storage", description = "ZFS Storage Management")
     )
 )]
 struct ApiDoc;
