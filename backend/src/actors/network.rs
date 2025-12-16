@@ -4,7 +4,7 @@
 //! are processed sequentially to avoid race conditions.
 
 use tokio::sync::{mpsc, oneshot};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::adapters;
 use crate::core::{NetworkConfig, NetworkInterface, PhysicalLink};
@@ -167,14 +167,17 @@ pub fn start_network_actor() -> NetworkActorHandle {
         while let Some(msg) = rx.recv().await {
             match msg {
                 NetworkMessage::ListInterfaces { resp } => {
+                    debug!(target: "yanos::network_actor", "Listing network interfaces");
                     let result = adapters::get_network_interfaces();
                     let _ = resp.send(result);
                 }
                 NetworkMessage::ListPhysicalLinks { resp } => {
+                    debug!(target: "yanos::network_actor", "Listing physical links");
                     let result = adapters::network::get_physical_links();
                     let _ = resp.send(result);
                 }
                 NetworkMessage::GetConfig { resp } => {
+                    debug!(target: "yanos::network_actor", "Getting network config");
                     let result = adapters::network::get_network_config();
                     let _ = resp.send(result);
                 }

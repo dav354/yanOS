@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::interval;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::adapters;
 use crate::error::AppError;
@@ -295,6 +295,7 @@ impl MetricsActor {
 }
 
 pub fn start_metrics_actor() -> Result<Arc<MetricsState>, AppError> {
+    debug!(target: "yanos::metrics", "Starting metrics actor");
     let (command_tx, rx) = mpsc::channel(32);
     let (broadcast_tx, _) = broadcast::channel(100);
     let actor = MetricsActor::new(rx, broadcast_tx.clone())?;
@@ -303,6 +304,7 @@ pub fn start_metrics_actor() -> Result<Arc<MetricsState>, AppError> {
 
     tokio::spawn(actor.run());
 
+    info!(target: "yanos::metrics", "Metrics actor started");
     Ok(Arc::new(MetricsState {
         broadcast_tx,
         history,

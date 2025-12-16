@@ -8,11 +8,17 @@
 
     let appliedLang = $state(i18n.current);
     let appliedTheme = $state(theme.current);
-    let appliedOtlpEndpoint = $state('');
+
+    // Telemetry receiver endpoints - each independent
+    let appliedTempoEndpoint = $state('');
+    let appliedLokiEndpoint = $state('');
+    let appliedPrometheusEndpoint = $state('');
 
     let pendingLang = $state(i18n.current);
     let pendingTheme = $state(theme.current);
-    let pendingOtlpEndpoint = $state('');
+    let pendingTempoEndpoint = $state('');
+    let pendingLokiEndpoint = $state('');
+    let pendingPrometheusEndpoint = $state('');
 
     let showPendingModal = $state(false);
     let pendingUrl = $state(null);
@@ -20,7 +26,15 @@
     let saveStatus = $state(null); // { type: 'success' | 'error', message: string }
     let telemetryLoaded = $state(false);
 
-    const telemetryDirty = $derived(pendingOtlpEndpoint !== appliedOtlpEndpoint);
+    // Test status per endpoint
+    let testingEndpoint = $state(null); // 'traces' | 'logs' | 'metrics' | null
+    let testResults = $state({}); // { traces?: {ok, error}, logs?: {...}, metrics?: {...} }
+
+    const telemetryDirty = $derived(
+        pendingTempoEndpoint !== appliedTempoEndpoint ||
+        pendingLokiEndpoint !== appliedLokiEndpoint ||
+        pendingPrometheusEndpoint !== appliedPrometheusEndpoint
+    );
     const isDirty = $derived(
         pendingLang !== appliedLang ||
         pendingTheme !== appliedTheme ||
@@ -33,13 +47,47 @@
             const res = await fetch('/api/v1/settings/telemetry', { credentials: 'include' });
             if (res.ok) {
                 const data = await res.json();
-                appliedOtlpEndpoint = data.otlp_endpoint ?? '';
-                pendingOtlpEndpoint = appliedOtlpEndpoint;
+                appliedTempoEndpoint = data.tempo_endpoint ?? '';
+                appliedLokiEndpoint = data.loki_endpoint ?? '';
+                appliedPrometheusEndpoint = data.prometheus_endpoint ?? '';
+                pendingTempoEndpoint = appliedTempoEndpoint;
+                pendingLokiEndpoint = appliedLokiEndpoint;
+                pendingPrometheusEndpoint = appliedPrometheusEndpoint;
             }
         } catch (e) {
             console.error('Failed to load telemetry settings', e);
         } finally {
             telemetryLoaded = true;
+        }
+    }
+
+    async function testEndpoint(type, endpoint) {
+        if (!endpoint.trim()) return;
+        testingEndpoint = type;
+        testResults = { ...testResults, [type]: null };
+
+        try {
+            const token = auth.readCsrfFromCookie?.() ?? auth.csrfToken;
+            const res = await fetch('/api/v1/settings/telemetry/test', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'X-CSRF-TOKEN': token } : {})
+                },
+                body: JSON.stringify({ endpoint: endpoint.trim() })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                testResults = { ...testResults, [type]: { ok: data.reachable, error: data.error } };
+            } else {
+                testResults = { ...testResults, [type]: { ok: false, error: 'Request failed' } };
+            }
+        } catch (e) {
+            testResults = { ...testResults, [type]: { ok: false, error: e.message } };
+        } finally {
+            testingEndpoint = null;
         }
     }
 
@@ -57,15 +105,21 @@
                     ...(token ? { 'X-CSRF-TOKEN': token } : {})
                 },
                 body: JSON.stringify({
-                    otlp_endpoint: pendingOtlpEndpoint.trim() === '' ? null : pendingOtlpEndpoint.trim()
+                    tempo_endpoint: pendingTempoEndpoint.trim() || null,
+                    loki_endpoint: pendingLokiEndpoint.trim() || null,
+                    prometheus_endpoint: pendingPrometheusEndpoint.trim() || null
                 })
             });
 
             if (res.ok) {
                 const data = await res.json();
-                appliedOtlpEndpoint = data.otlp_endpoint ?? '';
-                pendingOtlpEndpoint = appliedOtlpEndpoint;
-                saveStatus = { type: 'success', message: i18n.t('settings.telemetryTestSuccess') };
+                appliedTempoEndpoint = data.tempo_endpoint ?? '';
+                appliedLokiEndpoint = data.loki_endpoint ?? '';
+                appliedPrometheusEndpoint = data.prometheus_endpoint ?? '';
+                pendingTempoEndpoint = appliedTempoEndpoint;
+                pendingLokiEndpoint = appliedLokiEndpoint;
+                pendingPrometheusEndpoint = appliedPrometheusEndpoint;
+                saveStatus = { type: 'success', message: i18n.t('settings.telemetrySaved') };
             } else {
                 const err = await res.json();
                 saveStatus = { type: 'error', message: err.error || i18n.t('settings.telemetryTestFail') };
@@ -210,21 +264,94 @@
             </div>
         </div>
 
-        <div class="space-y-2">
-            <label class="text-sm text-text-main font-semibold" for="otlp-endpoint">
-                {i18n.t('settings.otlpEndpoint')}
-            </label>
-            <div class="flex flex-col sm:flex-row gap-3">
-                <input
-                    id="otlp-endpoint"
-                    class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 flex-1"
-                    placeholder={i18n.t('settings.otlpPlaceholder')}
-                    bind:value={pendingOtlpEndpoint}
-                />
+        <div class="space-y-4">
+            <!-- Tempo Endpoint (Traces) -->
+            <div class="space-y-2">
+                <label class="text-sm text-text-main font-semibold" for="tempo-endpoint">
+                    {i18n.t('settings.tempoEndpoint')}
+                </label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        id="tempo-endpoint"
+                        class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 flex-1"
+                        placeholder={i18n.t('settings.tempoPlaceholder')}
+                        bind:value={pendingTempoEndpoint}
+                    />
+                    <button
+                        class="px-3 py-2 border border-border-main rounded text-sm hover:bg-bg-main disabled:opacity-50"
+                        onclick={() => testEndpoint('tempo', pendingTempoEndpoint)}
+                        disabled={testingEndpoint === 'tempo' || !pendingTempoEndpoint.trim()}
+                        type="button"
+                    >
+                        {testingEndpoint === 'tempo' ? '...' : i18n.t('settings.test')}
+                    </button>
+                </div>
+                {#if testResults.tempo}
+                    <p class={`text-xs ${testResults.tempo.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {testResults.tempo.ok ? i18n.t('settings.reachable') : testResults.tempo.error}
+                    </p>
+                {/if}
             </div>
+
+            <!-- Loki Endpoint (Logs) -->
+            <div class="space-y-2 border-t border-border-main pt-4">
+                <label class="text-sm text-text-main font-semibold" for="loki-endpoint">
+                    {i18n.t('settings.lokiEndpoint')}
+                </label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        id="loki-endpoint"
+                        class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 flex-1"
+                        placeholder={i18n.t('settings.lokiPlaceholder')}
+                        bind:value={pendingLokiEndpoint}
+                    />
+                    <button
+                        class="px-3 py-2 border border-border-main rounded text-sm hover:bg-bg-main disabled:opacity-50"
+                        onclick={() => testEndpoint('loki', pendingLokiEndpoint)}
+                        disabled={testingEndpoint === 'loki' || !pendingLokiEndpoint.trim()}
+                        type="button"
+                    >
+                        {testingEndpoint === 'loki' ? '...' : i18n.t('settings.test')}
+                    </button>
+                </div>
+                {#if testResults.loki}
+                    <p class={`text-xs ${testResults.loki.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {testResults.loki.ok ? i18n.t('settings.reachable') : testResults.loki.error}
+                    </p>
+                {/if}
+            </div>
+
+            <!-- Prometheus Endpoint (Metrics) -->
+            <div class="space-y-2 border-t border-border-main pt-4">
+                <label class="text-sm text-text-main font-semibold" for="prometheus-endpoint">
+                    {i18n.t('settings.prometheusEndpoint')}
+                </label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        id="prometheus-endpoint"
+                        class="border border-border-main bg-bg-card text-text-main text-sm rounded px-3 py-2 flex-1"
+                        placeholder={i18n.t('settings.prometheusPlaceholder')}
+                        bind:value={pendingPrometheusEndpoint}
+                    />
+                    <button
+                        class="px-3 py-2 border border-border-main rounded text-sm hover:bg-bg-main disabled:opacity-50"
+                        onclick={() => testEndpoint('prometheus', pendingPrometheusEndpoint)}
+                        disabled={testingEndpoint === 'prometheus' || !pendingPrometheusEndpoint.trim()}
+                        type="button"
+                    >
+                        {testingEndpoint === 'prometheus' ? '...' : i18n.t('settings.test')}
+                    </button>
+                </div>
+                {#if testResults.prometheus}
+                    <p class={`text-xs ${testResults.prometheus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {testResults.prometheus.ok ? i18n.t('settings.reachable') : testResults.prometheus.error}
+                    </p>
+                {/if}
+            </div>
+
             <p class="text-xs text-text-muted">{i18n.t('settings.telemetryDisabled')}</p>
-            
-            <div class="flex items-center justify-end gap-3 pt-2 mt-2">
+
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-border-main">
                 {#if saveStatus}
                     <span class={`text-xs ${saveStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
                         {saveStatus.message}
@@ -233,7 +360,7 @@
                 <button
                     class="px-4 py-2 bg-primary text-primary-fg rounded text-sm hover:bg-primary-hover disabled:opacity-50"
                     onclick={saveTelemetry}
-                    disabled={savingTelemetry}
+                    disabled={savingTelemetry || !telemetryDirty}
                     type="button"
                 >
                     {savingTelemetry ? '...' : i18n.t('settings.apply')}

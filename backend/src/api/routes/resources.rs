@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use utoipa::ToSchema;
 
 use crate::api::state::AppState;
@@ -41,6 +41,7 @@ pub fn routes() -> Router<AppState> {
 )]
 #[instrument(skip(state))]
 pub async fn check_updates(State(state): State<AppState>) -> impl axum::response::IntoResponse {
+    debug!(target: "yanos::api", "POST /pkg/updates/check - triggering update check");
     state.pkg_actor.check_updates().await;
     axum::http::StatusCode::ACCEPTED
 }
@@ -56,7 +57,9 @@ pub async fn check_updates(State(state): State<AppState>) -> impl axum::response
 )]
 #[instrument(skip(state))]
 pub async fn list_updates(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    debug!(target: "yanos::api", "GET /pkg/updates");
     let updates = state.pkg_actor.get_updates().await?;
+    debug!(target: "yanos::api", count = updates.len(), "Returning updates");
     let value = serde_json::to_value(&updates).map_err(|e| {
         AppError::InternalServerError(format!("Failed to serialize updates: {e}"))
     })?;
@@ -77,7 +80,9 @@ pub async fn list_updates(State(state): State<AppState>) -> Result<Json<Value>, 
 )]
 #[instrument(skip(state))]
 pub async fn list_packages(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    debug!(target: "yanos::api", "GET /pkg/list");
     let pkgs = state.pkg_actor.list().await?;
+    debug!(target: "yanos::api", count = pkgs.len(), "Returning packages");
     let value = serde_json::to_value(&pkgs).map_err(|e| {
         AppError::InternalServerError(format!("Failed to serialize package list: {e}"))
     })?;

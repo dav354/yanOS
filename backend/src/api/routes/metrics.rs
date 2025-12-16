@@ -7,6 +7,7 @@ use axum::{
     response::IntoResponse,
 };
 use std::sync::Arc;
+use tracing::debug;
 
 #[utoipa::path(
     get,
@@ -25,10 +26,12 @@ pub async fn live_metrics(
     ws: WebSocketUpgrade,
     State(state): State<Arc<MetricsState>>,
 ) -> impl IntoResponse {
+    debug!(target: "yanos::api", "WebSocket upgrade requested for live metrics");
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<MetricsState>) {
+    debug!(target: "yanos::api", "Live metrics WebSocket connected");
     let history = {
         let h = state.history.read().await;
         let len = h.len();

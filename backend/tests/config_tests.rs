@@ -21,15 +21,19 @@ fn test_default_config_path() {
 fn test_app_config_default() {
     let config = AppConfig::default();
 
-    // Telemetry should have no OTLP endpoint by default
-    assert!(config.telemetry.otlp_endpoint.is_none());
+    // Telemetry should have no endpoints by default
+    assert!(config.telemetry.tempo_endpoint.is_none());
+    assert!(config.telemetry.loki_endpoint.is_none());
+    assert!(config.telemetry.prometheus_endpoint.is_none());
 }
 
 /// Test TelemetryConfig::default() creates valid defaults.
 #[test]
 fn test_telemetry_config_default() {
     let telemetry = TelemetryConfig::default();
-    assert!(telemetry.otlp_endpoint.is_none());
+    assert!(telemetry.tempo_endpoint.is_none());
+    assert!(telemetry.loki_endpoint.is_none());
+    assert!(telemetry.prometheus_endpoint.is_none());
 }
 
 /// Test loading config from a non-existent file returns defaults.
@@ -41,7 +45,9 @@ fn test_load_missing_file_returns_defaults() {
     let config = AppConfig::load(&config_path).expect("Should return defaults for missing file");
 
     // Should have default values
-    assert!(config.telemetry.otlp_endpoint.is_none());
+    assert!(config.telemetry.tempo_endpoint.is_none());
+    assert!(config.telemetry.loki_endpoint.is_none());
+    assert!(config.telemetry.prometheus_endpoint.is_none());
 }
 
 /// Test loading config from a valid JSON file.
@@ -52,19 +58,29 @@ fn test_load_valid_config() {
 
     let json = r#"{
         "telemetry": {
-            "otlp_endpoint": "http://localhost:4317"
+            "tempo_endpoint": "http://tempo:4317",
+            "loki_endpoint": "http://loki:3100",
+            "prometheus_endpoint": "http://prometheus:9090/api/v1/write"
         }
     }"#;
     fs::write(&config_path, json).expect("Failed to write test config");
 
     let config = AppConfig::load(&config_path).expect("Should load config");
     assert_eq!(
-        config.telemetry.otlp_endpoint,
-        Some("http://localhost:4317".to_string())
+        config.telemetry.tempo_endpoint,
+        Some("http://tempo:4317".to_string())
+    );
+    assert_eq!(
+        config.telemetry.loki_endpoint,
+        Some("http://loki:3100".to_string())
+    );
+    assert_eq!(
+        config.telemetry.prometheus_endpoint,
+        Some("http://prometheus:9090/api/v1/write".to_string())
     );
 }
 
-/// Test loading config with null telemetry endpoint.
+/// Test loading config with null telemetry endpoints.
 #[test]
 fn test_load_config_with_null_endpoint() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
@@ -72,13 +88,17 @@ fn test_load_config_with_null_endpoint() {
 
     let json = r#"{
         "telemetry": {
-            "otlp_endpoint": null
+            "tempo_endpoint": null,
+            "loki_endpoint": null,
+            "prometheus_endpoint": null
         }
     }"#;
     fs::write(&config_path, json).expect("Failed to write test config");
 
     let config = AppConfig::load(&config_path).expect("Should load config");
-    assert!(config.telemetry.otlp_endpoint.is_none());
+    assert!(config.telemetry.tempo_endpoint.is_none());
+    assert!(config.telemetry.loki_endpoint.is_none());
+    assert!(config.telemetry.prometheus_endpoint.is_none());
 }
 
 /// Test loading config with empty telemetry object.
@@ -93,7 +113,9 @@ fn test_load_config_with_empty_telemetry() {
     fs::write(&config_path, json).expect("Failed to write test config");
 
     let config = AppConfig::load(&config_path).expect("Should load config");
-    assert!(config.telemetry.otlp_endpoint.is_none());
+    assert!(config.telemetry.tempo_endpoint.is_none());
+    assert!(config.telemetry.loki_endpoint.is_none());
+    assert!(config.telemetry.prometheus_endpoint.is_none());
 }
 
 /// Test loading invalid JSON fails.
@@ -116,7 +138,9 @@ fn test_persist_creates_file() {
 
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://collector:4317".to_string()),
+            tempo_endpoint: Some("http://tempo:4317".to_string()),
+            loki_endpoint: Some("http://loki:3100".to_string()),
+            prometheus_endpoint: Some("http://prometheus:9090".to_string()),
         },
     };
 
@@ -126,7 +150,9 @@ fn test_persist_creates_file() {
 
     // Verify content
     let content = fs::read_to_string(&config_path).expect("Should read config");
-    assert!(content.contains("http://collector:4317"));
+    assert!(content.contains("http://tempo:4317"));
+    assert!(content.contains("http://loki:3100"));
+    assert!(content.contains("http://prometheus:9090"));
 }
 
 /// Test persist creates nested directories.
@@ -169,14 +195,18 @@ fn test_round_trip() {
 
     let original = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://test:4317".to_string()),
+            tempo_endpoint: Some("http://tempo:4317".to_string()),
+            loki_endpoint: Some("http://loki:3100".to_string()),
+            prometheus_endpoint: Some("http://prometheus:9090".to_string()),
         },
     };
 
     original.persist(&config_path).expect("Should persist");
     let loaded = AppConfig::load(&config_path).expect("Should load");
 
-    assert_eq!(original.telemetry.otlp_endpoint, loaded.telemetry.otlp_endpoint);
+    assert_eq!(original.telemetry.tempo_endpoint, loaded.telemetry.tempo_endpoint);
+    assert_eq!(original.telemetry.loki_endpoint, loaded.telemetry.loki_endpoint);
+    assert_eq!(original.telemetry.prometheus_endpoint, loaded.telemetry.prometheus_endpoint);
 }
 
 /// Test AppConfig Clone implementation.
@@ -184,12 +214,14 @@ fn test_round_trip() {
 fn test_app_config_clone() {
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://test:4317".to_string()),
+            tempo_endpoint: Some("http://tempo:4317".to_string()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
 
     let cloned = config.clone();
-    assert_eq!(cloned.telemetry.otlp_endpoint, config.telemetry.otlp_endpoint);
+    assert_eq!(cloned.telemetry.tempo_endpoint, config.telemetry.tempo_endpoint);
 }
 
 /// Test AppConfig Debug implementation.
@@ -205,23 +237,29 @@ fn test_app_config_debug() {
 #[test]
 fn test_telemetry_config_clone() {
     let telemetry = TelemetryConfig {
-        otlp_endpoint: Some("http://test:4317".to_string()),
+        tempo_endpoint: Some("http://tempo:4317".to_string()),
+        loki_endpoint: Some("http://loki:3100".to_string()),
+        prometheus_endpoint: None,
     };
 
     let cloned = telemetry.clone();
-    assert_eq!(cloned.otlp_endpoint, telemetry.otlp_endpoint);
+    assert_eq!(cloned.tempo_endpoint, telemetry.tempo_endpoint);
+    assert_eq!(cloned.loki_endpoint, telemetry.loki_endpoint);
+    assert_eq!(cloned.prometheus_endpoint, telemetry.prometheus_endpoint);
 }
 
 /// Test TelemetryConfig Debug implementation.
 #[test]
 fn test_telemetry_config_debug() {
     let telemetry = TelemetryConfig {
-        otlp_endpoint: Some("http://test:4317".to_string()),
+        tempo_endpoint: Some("http://tempo:4317".to_string()),
+        loki_endpoint: None,
+        prometheus_endpoint: None,
     };
 
     let debug_str = format!("{:?}", telemetry);
     assert!(debug_str.contains("TelemetryConfig"));
-    assert!(debug_str.contains("http://test:4317"));
+    assert!(debug_str.contains("http://tempo:4317"));
 }
 
 /// Test config serialization produces valid JSON.
@@ -229,13 +267,15 @@ fn test_telemetry_config_debug() {
 fn test_config_serialization() {
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://localhost:4317".to_string()),
+            tempo_endpoint: Some("http://tempo:4317".to_string()),
+            loki_endpoint: Some("http://loki:3100".to_string()),
+            prometheus_endpoint: Some("http://prometheus:9090".to_string()),
         },
     };
 
     let json = serde_json::to_string(&config).expect("Serialization failed");
-    assert!(json.contains("\"otlp_endpoint\""));
-    assert!(json.contains("http://localhost:4317"));
+    assert!(json.contains("\"tempo_endpoint\""));
+    assert!(json.contains("http://tempo:4317"));
 
     // Verify it can be deserialized
     let _: AppConfig = serde_json::from_str(&json).expect("Deserialization failed");
@@ -263,7 +303,7 @@ fn test_load_config_with_extra_fields() {
 
     let json = r#"{
         "telemetry": {
-            "otlp_endpoint": "http://localhost:4317"
+            "tempo_endpoint": "http://tempo:4317"
         },
         "unknown_field": "should be ignored",
         "nested": {
@@ -275,8 +315,8 @@ fn test_load_config_with_extra_fields() {
     // Should still load successfully, ignoring unknown fields
     let config = AppConfig::load(&config_path).expect("Should load config with extra fields");
     assert_eq!(
-        config.telemetry.otlp_endpoint,
-        Some("http://localhost:4317".to_string())
+        config.telemetry.tempo_endpoint,
+        Some("http://tempo:4317".to_string())
     );
 }
 
@@ -289,14 +329,16 @@ fn test_config_long_endpoint_url() {
     let long_url = format!("http://{}:4317", "x".repeat(5000));
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some(long_url.clone()),
+            tempo_endpoint: Some(long_url.clone()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
 
     config.persist(&config_path).expect("Should persist");
     let loaded = AppConfig::load(&config_path).expect("Should load");
 
-    assert_eq!(loaded.telemetry.otlp_endpoint, Some(long_url));
+    assert_eq!(loaded.telemetry.tempo_endpoint, Some(long_url));
 }
 
 /// Test config with special characters in endpoint URL.
@@ -308,14 +350,16 @@ fn test_config_special_chars_in_endpoint() {
     let special_url = "http://host:4317/path?query=value&foo=bar#fragment";
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some(special_url.to_string()),
+            tempo_endpoint: Some(special_url.to_string()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
 
     config.persist(&config_path).expect("Should persist");
     let loaded = AppConfig::load(&config_path).expect("Should load");
 
-    assert_eq!(loaded.telemetry.otlp_endpoint, Some(special_url.to_string()));
+    assert_eq!(loaded.telemetry.tempo_endpoint, Some(special_url.to_string()));
 }
 
 /// Test config with unicode in endpoint URL.
@@ -326,7 +370,9 @@ fn test_config_unicode_in_endpoint() {
 
     let config = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://host:4317".to_string()),
+            tempo_endpoint: Some("http://host:4317".to_string()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
 
@@ -347,7 +393,9 @@ fn test_persist_overwrites_existing() {
     // Create initial config
     let config1 = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://first:4317".to_string()),
+            tempo_endpoint: Some("http://first:4317".to_string()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
     config1.persist(&config_path).expect("Should persist first");
@@ -355,7 +403,9 @@ fn test_persist_overwrites_existing() {
     // Overwrite with new config
     let config2 = AppConfig {
         telemetry: TelemetryConfig {
-            otlp_endpoint: Some("http://second:4317".to_string()),
+            tempo_endpoint: Some("http://second:4317".to_string()),
+            loki_endpoint: None,
+            prometheus_endpoint: None,
         },
     };
     config2.persist(&config_path).expect("Should persist second");
@@ -363,7 +413,39 @@ fn test_persist_overwrites_existing() {
     // Verify it was overwritten
     let loaded = AppConfig::load(&config_path).expect("Should load");
     assert_eq!(
-        loaded.telemetry.otlp_endpoint,
+        loaded.telemetry.tempo_endpoint,
         Some("http://second:4317".to_string())
     );
+}
+
+/// Test TelemetryConfig::is_enabled() returns false when no endpoints set.
+#[test]
+fn test_telemetry_is_enabled_false() {
+    let telemetry = TelemetryConfig::default();
+    assert!(!telemetry.is_enabled());
+}
+
+/// Test TelemetryConfig::is_enabled() returns true when any endpoint is set.
+#[test]
+fn test_telemetry_is_enabled_true() {
+    let telemetry = TelemetryConfig {
+        tempo_endpoint: Some("http://tempo:4317".to_string()),
+        loki_endpoint: None,
+        prometheus_endpoint: None,
+    };
+    assert!(telemetry.is_enabled());
+
+    let telemetry2 = TelemetryConfig {
+        tempo_endpoint: None,
+        loki_endpoint: Some("http://loki:3100".to_string()),
+        prometheus_endpoint: None,
+    };
+    assert!(telemetry2.is_enabled());
+
+    let telemetry3 = TelemetryConfig {
+        tempo_endpoint: None,
+        loki_endpoint: None,
+        prometheus_endpoint: Some("http://prometheus:9090".to_string()),
+    };
+    assert!(telemetry3.is_enabled());
 }

@@ -7,7 +7,7 @@ edition = "2024"
 axum = { version = "0.8.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "chrono"] }
 utoipa = { version = "5.4.0", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 serde = { version = "1.0", features = ["derive"] }

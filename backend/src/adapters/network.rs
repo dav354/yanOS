@@ -29,7 +29,8 @@ use crate::error::AppError;
 ///
 /// Returns information about physical NICs including speed, MAC, and state.
 pub fn get_physical_links() -> Result<Vec<PhysicalLink>, AppError> {
-    // dladm show-phys -p -o link,media,state,speed,duplex,mtu
+    debug!(target: "yanos::network", "Querying physical links via dladm show-phys");
+
     let output = Command::new("dladm")
         .args(["show-phys", "-p", "-o", "link,media,state,speed,duplex,mtu"])
         .output()
@@ -37,6 +38,7 @@ pub fn get_physical_links() -> Result<Vec<PhysicalLink>, AppError> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        debug!(target: "yanos::network", stderr = %stderr, "dladm show-phys failed");
         return Err(AppError::InternalServerError(format!(
             "dladm show-phys failed: {stderr}"
         )));
@@ -58,6 +60,15 @@ pub fn get_physical_links() -> Result<Vec<PhysicalLink>, AppError> {
             // Get MAC address separately
             let mac = get_link_mac(&name).unwrap_or_default();
 
+            debug!(
+                target: "yanos::network",
+                link = %name,
+                state = %state,
+                speed,
+                mac = %mac,
+                "Found physical link"
+            );
+
             links.push(PhysicalLink {
                 name,
                 media,
@@ -71,6 +82,7 @@ pub fn get_physical_links() -> Result<Vec<PhysicalLink>, AppError> {
         }
     }
 
+    debug!(target: "yanos::network", count = links.len(), "Physical links query complete");
     Ok(links)
 }
 
@@ -93,7 +105,8 @@ fn get_link_mac(link: &str) -> Result<String, AppError> {
 ///
 /// Returns all configured IP address objects with their state and type.
 pub fn get_network_addresses() -> Result<Vec<NetworkAddress>, AppError> {
-    // ipadm show-addr -p -o addrobj,type,state,addr
+    debug!(target: "yanos::network", "Querying IP addresses via ipadm show-addr");
+
     let output = Command::new("ipadm")
         .args(["show-addr", "-p", "-o", "addrobj,type,state,addr"])
         .output()
@@ -101,6 +114,7 @@ pub fn get_network_addresses() -> Result<Vec<NetworkAddress>, AppError> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        debug!(target: "yanos::network", stderr = %stderr, "ipadm show-addr failed");
         return Err(AppError::InternalServerError(format!(
             "ipadm show-addr failed: {stderr}"
         )));
@@ -129,6 +143,15 @@ pub fn get_network_addresses() -> Result<Vec<NetworkAddress>, AppError> {
                 continue;
             }
 
+            debug!(
+                target: "yanos::network",
+                addrobj = %addrobj,
+                addr_type = %addr_type,
+                state = %state,
+                address = ?address,
+                "Found address object"
+            );
+
             addresses.push(NetworkAddress {
                 addrobj,
                 interface,
@@ -139,6 +162,7 @@ pub fn get_network_addresses() -> Result<Vec<NetworkAddress>, AppError> {
         }
     }
 
+    debug!(target: "yanos::network", count = addresses.len(), "Address query complete");
     Ok(addresses)
 }
 
@@ -146,10 +170,14 @@ pub fn get_network_addresses() -> Result<Vec<NetworkAddress>, AppError> {
 ///
 /// Merges physical link data from dladm with IP addresses from ipadm.
 pub fn get_network_interfaces() -> Result<Vec<NetworkInterface>, AppError> {
+    debug!(target: "yanos::network", "Building combined interface list");
+
     // Get physical links
     let links = get_physical_links().unwrap_or_default();
     let link_map: HashMap<String, PhysicalLink> =
         links.into_iter().map(|l| (l.name.clone(), l)).collect();
+
+    debug!(target: "yanos::network", physical_links = link_map.len(), "Got physical links");
 
     // Get IP addresses
     let addresses = get_network_addresses()?;
@@ -217,6 +245,7 @@ pub fn get_network_interfaces() -> Result<Vec<NetworkInterface>, AppError> {
     // Sort by name
     interfaces.sort_by(|a, b| a.name.cmp(&b.name));
 
+    debug!(target: "yanos::network", count = interfaces.len(), "Combined interface list complete");
     Ok(interfaces)
 }
 
@@ -232,10 +261,20 @@ fn parse_address_prefix(addr: &str) -> (String, Option<u8>) {
 
 /// Get system network configuration (DNS, gateway, hostname).
 pub fn get_network_config() -> Result<NetworkConfig, AppError> {
+    debug!(target: "yanos::network", "Reading system network configuration");
+
     let dns_servers = parse_resolv_conf_nameservers();
     let dns_search = parse_resolv_conf_search();
     let gateway = read_default_gateway();
     let hostname = read_hostname();
+
+    debug!(
+        target: "yanos::network",
+        hostname = %hostname,
+        dns_count = dns_servers.len(),
+        gateway = ?gateway,
+        "System network config read"
+    );
 
     Ok(NetworkConfig {
         dns_servers,

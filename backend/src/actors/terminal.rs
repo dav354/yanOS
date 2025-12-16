@@ -19,7 +19,7 @@ use std::thread;
 
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use tokio::sync::mpsc;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::error::AppError;
 
@@ -68,6 +68,8 @@ pub struct TerminalSession {
 
 #[instrument(skip(username))]
 pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppError> {
+    info!(target: "yanos::terminal", user = %username, "Starting terminal session");
+
     let (tx, mut rx) = mpsc::channel::<TerminalMessage>(32);
     let (out_tx, out_rx) = mpsc::channel::<Vec<u8>>(64);
 
@@ -133,16 +135,20 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
 
     // Actor loop
     tokio::spawn(async move {
+        debug!(target: "yanos::terminal", "Terminal actor loop started");
+
         while let Some(msg) = rx.recv().await {
             match msg {
                 TerminalMessage::Input(data) => {
+                    debug!(target: "yanos::terminal", bytes = data.len(), "Received input");
                     if let Err(e) = writer.write_all(data.as_bytes()) {
-                        error!(error = ?e, "terminal write failed");
+                        error!(target: "yanos::terminal", error = ?e, "Terminal write failed");
                         break;
                     }
                     let _ = writer.flush();
                 }
                 TerminalMessage::Resize { rows, cols } => {
+                    debug!(target: "yanos::terminal", rows, cols, "Resizing terminal");
                     if let Ok(master) = master_for_resize.lock() {
                         let _ = master.resize(PtySize {
                             rows,
@@ -153,12 +159,13 @@ pub fn start_terminal_session(username: String) -> Result<TerminalSession, AppEr
                     }
                 }
                 TerminalMessage::Shutdown => {
-                    info!(target: "yanos::terminal_actor", "shutdown requested");
+                    info!(target: "yanos::terminal", "Shutdown requested");
                     break;
                 }
             }
         }
 
+        info!(target: "yanos::terminal", "Cleaning up terminal session");
         let _ = child.kill();
         let _ = child.wait();
     });

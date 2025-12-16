@@ -2,7 +2,7 @@ use axum::Router;
 use axum::routing::get;
 use axum::{Json, extract::State};
 use serde_json::json;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::api::state::AppState;
 use crate::auth;
@@ -25,6 +25,7 @@ pub fn routes() -> Router<AppState> {
 )]
 #[instrument]
 pub async fn healthz() -> Json<serde_json::Value> {
+    debug!(target: "yanos::api", "Health check requested");
     Json(json!({ "status": "ok" }))
 }
 
@@ -42,7 +43,9 @@ pub async fn healthz() -> Json<serde_json::Value> {
 pub async fn readyz(
     State(app_state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    debug!(target: "yanos::api", "Readiness check requested");
     if !app_state.tls_state.is_ready() {
+        debug!(target: "yanos::api", "Readiness check failed: TLS not ready");
         return Err(AppError::ServiceUnavailable(
             "TLS configuration not ready".to_string(),
         ));
@@ -50,5 +53,6 @@ pub async fn readyz(
 
     auth::session_store_healthcheck(&app_state.session_store).await?;
 
+    debug!(target: "yanos::api", "Readiness check passed");
     Ok(Json(json!({ "status": "ready" })))
 }

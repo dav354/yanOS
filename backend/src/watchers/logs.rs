@@ -23,7 +23,7 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::events::{EventBus, ExternalEvent};
 
@@ -175,6 +175,7 @@ pub fn start_system_log_watcher(
         }
     });
 
+    debug!(target: "yanos::logs", path = ?log_path, "System log watcher task spawned");
     info!(target: "yanos::logs", path = ?log_path, "System log watcher started");
     Ok(LogWatcherHandle { handle, shutdown })
 }

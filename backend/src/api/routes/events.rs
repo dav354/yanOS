@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
-use tracing::instrument;
+use tracing::{debug, instrument};
 use utoipa::ToSchema;
 
 use crate::events::EventBus;
@@ -32,10 +32,12 @@ pub async fn stream_events(
     ws: WebSocketUpgrade,
     State(event_bus): State<EventBus>,
 ) -> impl IntoResponse {
+    debug!(target: "yanos::api", "WebSocket upgrade requested for event stream");
     ws.on_upgrade(move |socket| handle_socket(socket, event_bus))
 }
 
 async fn handle_socket(socket: WebSocket, event_bus: EventBus) {
+    debug!(target: "yanos::api", "Event stream WebSocket connected");
     let (mut sender, mut receiver) = socket.split();
     let mut rx = event_bus.subscribe();
 

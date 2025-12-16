@@ -1,7 +1,12 @@
+//! Filesystem watcher for configuration file changes.
+//!
+//! Monitors system configuration files and publishes change events
+//! to the EventBus for UI refresh.
+
 use std::path::{Path, PathBuf};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::events::{EventBus, ExternalEvent};
 
@@ -15,9 +20,12 @@ pub async fn start_filesystem_watcher(
         return Ok(None);
     }
 
+    debug!(target: "yanos::watcher", path_count = paths.len(), "Initializing filesystem watcher");
+
     // notify requires a blocking callback; we forward into the async channel.
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| match res {
         Ok(event) => {
+            debug!(target: "yanos::watcher", kind = ?event.kind, paths = ?event.paths, "Filesystem event");
             if matches!(
                 event.kind,
                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)

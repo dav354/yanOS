@@ -14,7 +14,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 use utoipa::ToSchema;
 
 use crate::api::state::AppState;
@@ -77,7 +77,9 @@ pub fn routes() -> Router<AppState> {
 pub async fn list_interfaces(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NetworkInterface>>, AppError> {
+    debug!(target: "yanos::api", "GET /network/interfaces");
     let interfaces = state.network_actor.list_interfaces().await?;
+    debug!(target: "yanos::api", count = interfaces.len(), "Returning interfaces");
     Ok(Json(interfaces))
 }
 
@@ -137,19 +139,24 @@ pub async fn update_config(
     State(state): State<AppState>,
     Json(req): Json<UpdateConfigRequest>,
 ) -> Result<Json<SuccessResponse>, AppError> {
+    debug!(target: "yanos::api", ?req, "POST /network/config");
+
     // Update DNS if provided
     if req.dns_servers.is_some() || req.dns_search.is_some() {
         let current = state.network_actor.get_config().await?;
         let servers = req.dns_servers.unwrap_or(current.dns_servers);
         let search = req.dns_search.unwrap_or(current.dns_search);
+        debug!(target: "yanos::api", ?servers, ?search, "Updating DNS");
         state.network_actor.set_dns(servers, search).await?;
     }
 
     // Update gateway if provided
-    if let Some(gateway) = req.gateway {
+    if let Some(gateway) = req.gateway.clone() {
+        debug!(target: "yanos::api", gateway = %gateway, "Updating gateway");
         state.network_actor.set_gateway(gateway).await?;
     }
 
+    debug!(target: "yanos::api", "Network config updated successfully");
     Ok(Json(SuccessResponse {
         success: true,
         message: Some("Network configuration updated".to_string()),
@@ -176,11 +183,20 @@ pub async fn set_address(
     Path(name): Path<String>,
     Json(req): Json<SetAddressRequest>,
 ) -> Result<Json<SuccessResponse>, AppError> {
+    debug!(
+        target: "yanos::api",
+        interface = %name,
+        address = %req.address,
+        prefix_len = req.prefix_len,
+        "POST /network/interface/{name}/address"
+    );
+
     state
         .network_actor
         .set_static_address(name.clone(), req.address, req.prefix_len)
         .await?;
 
+    debug!(target: "yanos::api", interface = %name, "Static address configured");
     Ok(Json(SuccessResponse {
         success: true,
         message: Some(format!("Static address configured on {}", name)),
@@ -205,8 +221,11 @@ pub async fn set_dhcp(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<SuccessResponse>, AppError> {
+    debug!(target: "yanos::api", interface = %name, "POST /network/interface/{name}/dhcp");
+
     state.network_actor.set_dhcp(name.clone()).await?;
 
+    debug!(target: "yanos::api", interface = %name, "DHCP configured");
     Ok(Json(SuccessResponse {
         success: true,
         message: Some(format!("DHCP configured on {}", name)),

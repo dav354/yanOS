@@ -1,11 +1,17 @@
+//! Package management adapter for illumos IPS.
+//!
+//! Provides functions to query and manage packages via the pkg(1) command.
+
 use std::process::Command;
-use tracing::warn;
 use std::thread;
 use std::time::Duration;
+
+use tracing::{debug, warn};
 
 use crate::core::PackageInfo;
 use crate::error::AppError;
 
+/// Parse an IPS FMRI into (name, version, build_time).
 fn parse_fmri(fmri: &str) -> (String, String, String) {
     // Parse FMRI: pkg://publisher/category/component@version:timestamp
     // We want to strip the publisher to get a clean name (category/component)
@@ -24,25 +30,37 @@ fn parse_fmri(fmri: &str) -> (String, String, String) {
     (name.to_string(), version.to_string(), build_time.to_string())
 }
 
+/// Refresh the IPS catalog from remote repositories.
 pub fn refresh_catalog() -> Result<(), AppError> {
+    debug!(target: "yanos::pkg", "Refreshing package catalog");
+
     let output = Command::new("pkg").arg("refresh").output();
     match output {
-        Ok(out) if out.status.success() => Ok(()),
+        Ok(out) if out.status.success() => {
+            debug!(target: "yanos::pkg", "Catalog refresh complete");
+            Ok(())
+        }
         Ok(out) => {
             let err = String::from_utf8_lossy(&out.stderr);
-            warn!(target: "zos::pkg_adapter", "pkg refresh failed: {}", err);
+            warn!(target: "yanos::pkg", stderr = %err, "pkg refresh failed");
             Err(AppError::InternalServerError(format!("pkg refresh failed: {}", err)))
         }
-        Err(e) => Err(AppError::InternalServerError(format!("pkg refresh execution failed: {}", e))),
+        Err(e) => {
+            warn!(target: "yanos::pkg", error = %e, "pkg refresh execution failed");
+            Err(AppError::InternalServerError(format!("pkg refresh execution failed: {}", e)))
+        }
     }
 }
 
+/// Get list of all installed packages.
 pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
+    debug!(target: "yanos::pkg", "Listing installed packages");
+
     for attempt in 1..=3 {
         let output = Command::new("pkg").args(["list", "-Hv"]).output();
         match output {
             Ok(out) if out.status.success() => {
-                let parsed = String::from_utf8_lossy(&out.stdout)
+                let parsed: Vec<PackageInfo> = String::from_utf8_lossy(&out.stdout)
                     .lines()
                     .filter_map(|line| {
                         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -59,25 +77,30 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
                         }
                     })
                     .collect();
+
+                debug!(target: "yanos::pkg", count = parsed.len(), "Package list retrieved");
                 return Ok(parsed);
             }
             Ok(out) => {
                 warn!(
-                    target: "zos::pkg_adapter",
+                    target: "yanos::pkg",
                     code = ?out.status.code(),
-                    "pkg list failed (attempt {attempt})"
+                    attempt,
+                    "pkg list failed"
                 );
             }
             Err(err) => {
                 warn!(
-                    target: "zos::pkg_adapter",
+                    target: "yanos::pkg",
                     error = ?err,
-                    "pkg list execution failed (attempt {attempt})"
+                    attempt,
+                    "pkg list execution failed"
                 );
             }
         }
 
         if attempt < 3 {
+            debug!(target: "yanos::pkg", attempt, "Retrying pkg list");
             thread::sleep(Duration::from_millis(250));
         }
     }
@@ -92,6 +115,8 @@ pub fn get_pkg_list() -> Result<Vec<PackageInfo>, AppError> {
 /// Returns PackageInfo with the NEW (remote) version/build_time, not the installed one.
 /// The frontend compares this against the installed list to show the diff.
 pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
+    debug!(target: "yanos::pkg", "Checking for package updates");
+
     // Step 1: Get list of package names that have updates available.
     // `pkg list -u` shows installed packages with newer versions in the repo.
     let list_output = Command::new("pkg").args(["list", "-uH", "-o", "name"]).output();
@@ -106,14 +131,16 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                     names.push(name.to_string());
                 }
             }
+            debug!(target: "yanos::pkg", packages_with_updates = names.len(), "Found packages with updates");
         }
         Ok(out) => {
             // Exit code 4 = no updates available (not an error)
             if out.status.code() == Some(4) {
+                debug!(target: "yanos::pkg", "No updates available");
                 return Ok(vec![]);
             }
             warn!(
-                target: "zos::pkg_adapter",
+                target: "yanos::pkg",
                 code = ?out.status.code(),
                 stderr = %String::from_utf8_lossy(&out.stderr),
                 "pkg list -u failed"
@@ -124,7 +151,7 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
         }
         Err(err) => {
             warn!(
-                target: "zos::pkg_adapter",
+                target: "yanos::pkg",
                 error = ?err,
                 "pkg list -u execution failed"
             );
@@ -135,11 +162,13 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
     }
 
     if names.is_empty() {
+        debug!(target: "yanos::pkg", "No updates available");
         return Ok(vec![]);
     }
 
     // Step 2: Get remote (NEW) version info for these packages.
     // `pkg info -r` shows the latest available version in the repository.
+    debug!(target: "yanos::pkg", count = names.len(), "Fetching remote version info");
     let mut updates: Vec<PackageInfo> = Vec::new();
 
     let mut cmd = Command::new("pkg");
@@ -149,10 +178,10 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
     if let Ok(out) = cmd.output() {
         if !out.status.success() {
             warn!(
-                target: "zos::pkg_adapter",
-                "pkg info -r failed (partial results?): code={:?}, stderr={}",
-                out.status.code(),
-                String::from_utf8_lossy(&out.stderr)
+                target: "yanos::pkg",
+                code = ?out.status.code(),
+                stderr = %String::from_utf8_lossy(&out.stderr),
+                "pkg info -r failed (partial results?)"
             );
         }
 
@@ -167,6 +196,13 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                         let fmri = val;
                         let (_, version, build_time) = parse_fmri(fmri);
 
+                        debug!(
+                            target: "yanos::pkg",
+                            package = %name,
+                            new_version = %version,
+                            "Found update"
+                        );
+
                         updates.push(PackageInfo {
                             name,
                             version,
@@ -178,6 +214,7 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
         }
     }
 
+    debug!(target: "yanos::pkg", count = updates.len(), "Update check complete");
     // If pkg info -r failed to return info for some packages, they won't be in the list.
     // This is acceptable - we only show updates we can confirm the new version for.
     Ok(updates)

@@ -3,6 +3,7 @@ use axum::{
     extract::{Query, State},
 };
 use serde::Deserialize;
+use tracing::debug;
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{api::AppState, events::LoggedEvent};
@@ -32,10 +33,12 @@ pub async fn list_logs(
     Query(query): Query<LogsQuery>,
 ) -> Json<Vec<LoggedEvent>> {
     let limit = query.limit.unwrap_or(300).min(1000);
+    debug!(target: "yanos::api", limit, before = ?query.before, "Fetching logs");
     let logs = if let Some(before) = query.before {
         state.event_bus.snapshot_before(&before, limit)
     } else {
         state.event_bus.snapshot(limit)
     };
+    debug!(target: "yanos::api", count = logs.len(), "Logs fetched");
     Json(logs)
 }

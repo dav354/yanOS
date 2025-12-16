@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::adapters::zfs::{DatasetInfo, LibZfsHandle, PoolInfo};
 use crate::error::AppError;
@@ -123,18 +123,22 @@ pub fn start_zfs_actor() -> Result<ZfsActorHandle, AppError> {
             // Process messages on a blocking thread since libzfs may block
             let result = tokio::task::spawn_blocking(move || match msg {
                 ZfsMessage::ListPools { resp } => {
+                    debug!(target: "yanos::zfs_actor", "Listing pools");
                     let result = crate::adapters::zfs::list_pools(&handle);
                     let _ = resp.send(result);
                 }
                 ZfsMessage::GetPool { name, resp } => {
+                    debug!(target: "yanos::zfs_actor", pool = %name, "Getting pool");
                     let result = crate::adapters::zfs::get_pool(&handle, &name);
                     let _ = resp.send(result);
                 }
                 ZfsMessage::ListDatasets { pool, resp } => {
+                    debug!(target: "yanos::zfs_actor", pool = %pool, "Listing datasets");
                     let result = crate::adapters::zfs::list_datasets(&handle, &pool);
                     let _ = resp.send(result);
                 }
                 ZfsMessage::GetDataset { name, resp } => {
+                    debug!(target: "yanos::zfs_actor", dataset = %name, "Getting dataset");
                     let result = crate::adapters::zfs::get_dataset(&handle, &name);
                     let _ = resp.send(result);
                 }

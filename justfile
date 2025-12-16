@@ -18,7 +18,7 @@ build-frontend:
 deploy-backend:
     ssh {{ vmConnection }} "mkdir -p {{ backendDir }}"
     rsync -avz --delete --exclude 'target' backend/ {{ vmConnection }}:{{ backendDir }}
-    ssh -t {{ vmConnection }} "cd {{ backendDir }} && LD_LIBRARY_PATH=/opt/ooce/llvm-21/lib:\$LD_LIBRARY_PATH /opt/ooce/bin/cargo run --profile dev"
+    ssh -t {{ vmConnection }} "cd {{ backendDir }} && RUST_LOG=debug LD_LIBRARY_PATH=/opt/ooce/llvm-21/lib:\$LD_LIBRARY_PATH /opt/ooce/bin/cargo run --profile dev"
 
 # Deploy frontend on VM
 deploy-frontend: build-frontend

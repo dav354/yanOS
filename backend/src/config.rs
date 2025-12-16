@@ -7,8 +7,11 @@
 //! # Default Location
 //! `/etc/opt/yanos/config.json`
 //!
-//! # Current Settings
-//! - `telemetry.otlp_endpoint` - Optional OpenTelemetry OTLP endpoint URL
+//! # Telemetry Settings
+//! Configure external receivers for telemetry data:
+//! - `telemetry.tempo_endpoint` - Tempo endpoint for traces (OTLP/gRPC)
+//! - `telemetry.loki_endpoint` - Loki endpoint for logs (OTLP/gRPC)
+//! - `telemetry.prometheus_endpoint` - Prometheus remote write endpoint
 
 use std::{
     fs, io,
@@ -17,6 +20,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+use utoipa::ToSchema;
 
 use crate::error::AppError;
 
@@ -24,10 +28,49 @@ use crate::error::AppError;
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/opt/yanos/config.json";
 
 /// Telemetry/observability configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+///
+/// Configure external receivers for telemetry data export.
+/// Each endpoint is independent - leave empty to disable that export type.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct TelemetryConfig {
-    /// OpenTelemetry OTLP collector endpoint (e.g., "http://localhost:4317")
-    pub otlp_endpoint: Option<String>,
+    /// Tempo endpoint for distributed traces (OTLP/gRPC, e.g., "http://tempo:4317")
+    /// Leave empty to disable trace export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tempo_endpoint: Option<String>,
+
+    /// Loki endpoint for log export (OTLP/gRPC, e.g., "http://loki:3100")
+    /// Leave empty to disable log export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loki_endpoint: Option<String>,
+
+    /// Prometheus remote write endpoint (e.g., "http://prometheus:9090/api/v1/write")
+    /// Leave empty to disable metrics export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prometheus_endpoint: Option<String>,
+}
+
+impl TelemetryConfig {
+    /// Get the Tempo endpoint for traces.
+    pub fn get_tempo_endpoint(&self) -> Option<&String> {
+        self.tempo_endpoint.as_ref()
+    }
+
+    /// Get the Loki endpoint for logs.
+    pub fn get_loki_endpoint(&self) -> Option<&String> {
+        self.loki_endpoint.as_ref()
+    }
+
+    /// Get the Prometheus endpoint for metrics.
+    pub fn get_prometheus_endpoint(&self) -> Option<&String> {
+        self.prometheus_endpoint.as_ref()
+    }
+
+    /// Returns true if any telemetry export is configured.
+    pub fn is_enabled(&self) -> bool {
+        self.tempo_endpoint.is_some()
+            || self.loki_endpoint.is_some()
+            || self.prometheus_endpoint.is_some()
+    }
 }
 
 /// Root application configuration.

@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use tokio::select;
 use tower_sessions::Session;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::actors::start_terminal_session;
 use crate::api::AppState;
@@ -51,10 +51,12 @@ pub async fn ws_handler(
         .map_err(|e| AppError::InternalServerError(format!("Session error: {e}")))?
         .ok_or(AppError::Unauthorized("Not logged in".to_string()))?;
 
+    debug!(target: "yanos::api", %username, "WebSocket upgrade requested for terminal");
     Ok(ws.on_upgrade(move |socket| handle_terminal(socket, username)))
 }
 
 async fn handle_terminal(socket: WebSocket, username: String) {
+    debug!(target: "yanos::api", %username, "Terminal WebSocket connected");
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     let session = match start_terminal_session(username.clone()) {

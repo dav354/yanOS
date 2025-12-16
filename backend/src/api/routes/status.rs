@@ -2,7 +2,7 @@ use axum::{Json, Router, routing::get};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_sessions::Session;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use utoipa::ToSchema;
 
 use crate::adapters;
@@ -32,8 +32,9 @@ pub fn routes() -> Router<AppState> {
 )]
 #[instrument(skip(session))]
 pub async fn get_status(session: Session) -> Json<StatusResponse> {
-    tracing::info!("Responding to API status check");
+    debug!(target: "yanos::api", "Status check requested");
     let username: Option<String> = session.get("username").await.unwrap_or(None);
+    debug!(target: "yanos::api", ?username, "Status check response");
     Json(StatusResponse {
         status: "ok".to_string(),
         user: username,
@@ -54,9 +55,11 @@ pub use get_status as api_status;
 )]
 #[instrument]
 pub async fn system_info() -> Result<Json<serde_json::Value>, AppError> {
+    debug!(target: "yanos::api", "System info requested");
     let info = adapters::get_system_info().map_err(|e| {
         AppError::InternalServerError(format!("Failed to collect system info: {e}"))
     })?;
+    debug!(target: "yanos::api", hostname = %info.hostname, "System info collected");
     Ok(Json(json!({
         "hostname": info.hostname,
         "kernel_version": info.kernel_version,

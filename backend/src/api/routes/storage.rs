@@ -11,7 +11,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::adapters::zfs::{DatasetInfo, PoolInfo};
 use crate::api::AppState;
@@ -30,7 +30,9 @@ use crate::error::AppError;
 )]
 #[instrument(skip(state))]
 pub async fn list_pools(State(state): State<AppState>) -> Result<Json<Vec<PoolInfo>>, AppError> {
+    debug!(target: "yanos::api", "GET /storage/pools");
     let pools = state.zfs_actor.list_pools().await?;
+    debug!(target: "yanos::api", count = pools.len(), "Returning pools");
     Ok(Json(pools))
 }
 
@@ -54,7 +56,9 @@ pub async fn get_pool(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<PoolInfo>, AppError> {
+    debug!(target: "yanos::api", pool = %name, "GET /storage/pools/{name}");
     let pool = state.zfs_actor.get_pool(name).await?;
+    debug!(target: "yanos::api", pool = %pool.name, health = %pool.health, "Returning pool");
     Ok(Json(pool))
 }
 
@@ -78,7 +82,9 @@ pub async fn list_datasets(
     State(state): State<AppState>,
     Path(pool): Path<String>,
 ) -> Result<Json<Vec<DatasetInfo>>, AppError> {
+    debug!(target: "yanos::api", pool = %pool, "GET /storage/pools/{pool}/datasets");
     let datasets = state.zfs_actor.list_datasets(pool).await?;
+    debug!(target: "yanos::api", count = datasets.len(), "Returning datasets");
     Ok(Json(datasets))
 }
 
@@ -102,7 +108,9 @@ pub async fn get_dataset(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<DatasetInfo>, AppError> {
+    debug!(target: "yanos::api", dataset = %name, "GET /storage/datasets/{name}");
     let dataset = state.zfs_actor.get_dataset(name).await?;
+    debug!(target: "yanos::api", dataset = %dataset.name, "Returning dataset");
     Ok(Json(dataset))
 }
 
