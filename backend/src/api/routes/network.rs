@@ -52,13 +52,29 @@ pub struct UpdateConfigRequest {
     pub gateway: Option<String>,
 }
 
+/// Request to set MTU on an interface.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetMtuRequest {
+    /// MTU size (576-9000, typically 1500 or 9000 for jumbo frames)
+    pub mtu: u32,
+}
+
+/// Request to set hostname.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetHostnameRequest {
+    /// New hostname
+    pub hostname: String,
+}
+
 pub fn routes() -> Router<AppState> {
     Router::<AppState>::new()
         .route("/network/interfaces", get(list_interfaces))
         .route("/network/links", get(list_links))
         .route("/network/config", get(get_config).post(update_config))
+        .route("/network/hostname", post(set_hostname))
         .route("/network/interface/{name}/address", post(set_address))
         .route("/network/interface/{name}/dhcp", post(set_dhcp))
+        .route("/network/interface/{name}/mtu", post(set_mtu))
 }
 
 /// List all network interfaces.
@@ -229,5 +245,77 @@ pub async fn set_dhcp(
     Ok(Json(SuccessResponse {
         success: true,
         message: Some(format!("DHCP configured on {}", name)),
+    }))
+}
+
+/// Set MTU on an interface.
+///
+/// Configures the Maximum Transmission Unit size on a physical link.
+/// Valid range is 576-9000 (9000 for jumbo frames).
+#[utoipa::path(
+    post,
+    path = "/api/v1/network/interface/{name}/mtu",
+    tag = "network",
+    params(
+        ("name" = String, Path, description = "Interface/link name (e.g., e1000g0)")
+    ),
+    request_body = SetMtuRequest,
+    responses(
+        (status = 200, description = "MTU configured", body = SuccessResponse),
+        (status = 400, description = "Invalid MTU value")
+    ),
+    security(("basic_auth" = []))
+)]
+#[instrument(skip(state))]
+pub async fn set_mtu(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(req): Json<SetMtuRequest>,
+) -> Result<Json<SuccessResponse>, AppError> {
+    debug!(
+        target: "yanos::api",
+        interface = %name,
+        mtu = req.mtu,
+        "POST /network/interface/{name}/mtu"
+    );
+
+    state.network_actor.set_mtu(name.clone(), req.mtu).await?;
+
+    debug!(target: "yanos::api", interface = %name, mtu = req.mtu, "MTU configured");
+    Ok(Json(SuccessResponse {
+        success: true,
+        message: Some(format!("MTU set to {} on {}", req.mtu, name)),
+    }))
+}
+
+/// Set the system hostname.
+#[utoipa::path(
+    post,
+    path = "/api/v1/network/hostname",
+    tag = "network",
+    request_body = SetHostnameRequest,
+    responses(
+        (status = 200, description = "Hostname configured", body = SuccessResponse),
+        (status = 400, description = "Invalid hostname")
+    ),
+    security(("basic_auth" = []))
+)]
+#[instrument(skip(state))]
+pub async fn set_hostname(
+    State(state): State<AppState>,
+    Json(req): Json<SetHostnameRequest>,
+) -> Result<Json<SuccessResponse>, AppError> {
+    debug!(
+        target: "yanos::api",
+        hostname = %req.hostname,
+        "POST /network/hostname"
+    );
+
+    state.network_actor.set_hostname(req.hostname.clone()).await?;
+
+    debug!(target: "yanos::api", hostname = %req.hostname, "Hostname configured");
+    Ok(Json(SuccessResponse {
+        success: true,
+        message: Some(format!("Hostname set to {}", req.hostname)),
     }))
 }

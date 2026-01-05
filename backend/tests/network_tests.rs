@@ -251,3 +251,160 @@ fn test_minimal_interface() {
     assert!(!json.contains("mac"));
     assert!(!json.contains("speed"));
 }
+
+// =============================================================================
+// MTU Tests
+// =============================================================================
+
+/// Test MTU field in PhysicalLink.
+#[test]
+fn test_physical_link_mtu_field() {
+    // Standard MTU
+    let link = PhysicalLink {
+        name: "e1000g0".to_string(),
+        media: "Ethernet".to_string(),
+        state: "up".to_string(),
+        speed: 1000,
+        duplex: "full".to_string(),
+        mac: "00:11:22:33:44:55".to_string(),
+        mtu: 1500,
+        friendly_name: None,
+    };
+    assert_eq!(link.mtu, 1500);
+
+    // Jumbo frame MTU
+    let jumbo_link = PhysicalLink {
+        name: "ixgbe0".to_string(),
+        media: "Ethernet".to_string(),
+        state: "up".to_string(),
+        speed: 10000,
+        duplex: "full".to_string(),
+        mac: "aa:bb:cc:dd:ee:ff".to_string(),
+        mtu: 9000,
+        friendly_name: None,
+    };
+    assert_eq!(jumbo_link.mtu, 9000);
+}
+
+/// Test MTU field in NetworkInterface.
+#[test]
+fn test_network_interface_mtu_field() {
+    let iface = NetworkInterface {
+        name: "e1000g0".to_string(),
+        state: "up".to_string(),
+        address: "192.168.1.100".to_string(),
+        prefix_len: Some(24),
+        mac: Some("00:11:22:33:44:55".to_string()),
+        speed: Some(1000),
+        mtu: Some(1500),
+        addr_type: Some("static".to_string()),
+        friendly_name: None,
+    };
+
+    assert_eq!(iface.mtu, Some(1500));
+
+    let json = serde_json::to_string(&iface).expect("Serialization failed");
+    assert!(json.contains("\"mtu\":1500"));
+}
+
+/// Test MTU serialization in PhysicalLink.
+#[test]
+fn test_mtu_serialization() {
+    let link = PhysicalLink {
+        name: "test0".to_string(),
+        media: "Ethernet".to_string(),
+        state: "up".to_string(),
+        speed: 1000,
+        duplex: "full".to_string(),
+        mac: "00:00:00:00:00:00".to_string(),
+        mtu: 9000,
+        friendly_name: None,
+    };
+
+    let json = serde_json::to_string(&link).expect("Serialization failed");
+    assert!(json.contains("\"mtu\":9000"));
+
+    let deserialized: PhysicalLink = serde_json::from_str(&json).expect("Deserialization failed");
+    assert_eq!(deserialized.mtu, 9000);
+}
+
+/// Test MTU values at boundaries.
+#[test]
+fn test_mtu_boundary_values() {
+    // Minimum valid MTU
+    let min_link = PhysicalLink {
+        name: "test0".to_string(),
+        media: "Ethernet".to_string(),
+        state: "up".to_string(),
+        speed: 100,
+        duplex: "full".to_string(),
+        mac: "00:00:00:00:00:00".to_string(),
+        mtu: 576,
+        friendly_name: None,
+    };
+    assert_eq!(min_link.mtu, 576);
+
+    // Maximum jumbo MTU
+    let max_link = PhysicalLink {
+        name: "test1".to_string(),
+        media: "Ethernet".to_string(),
+        state: "up".to_string(),
+        speed: 10000,
+        duplex: "full".to_string(),
+        mac: "00:00:00:00:00:00".to_string(),
+        mtu: 9000,
+        friendly_name: None,
+    };
+    assert_eq!(max_link.mtu, 9000);
+}
+
+/// Test MTU validation in set_mtu adapter function.
+#[test]
+fn test_set_mtu_validation() {
+    use yanos_backend::adapters::network::set_mtu;
+    use yanos_backend::error::AppError;
+
+    // Test MTU too low
+    let result = set_mtu("fake_link", 500);
+    match result {
+        Err(AppError::BadRequest(msg)) => {
+            assert!(msg.contains("576"));
+            assert!(msg.contains("9000"));
+        }
+        _ => panic!("Expected BadRequest error for MTU < 576"),
+    }
+
+    // Test MTU too high
+    let result = set_mtu("fake_link", 10000);
+    match result {
+        Err(AppError::BadRequest(msg)) => {
+            assert!(msg.contains("576"));
+            assert!(msg.contains("9000"));
+        }
+        _ => panic!("Expected BadRequest error for MTU > 9000"),
+    }
+}
+
+// =============================================================================
+// NetworkActor Tests
+// =============================================================================
+
+/// Test NetworkActor set_mtu method.
+#[tokio::test]
+async fn test_network_actor_set_mtu() {
+    use yanos_backend::actors::start_network_actor;
+
+    let actor = start_network_actor();
+
+    // Test with invalid MTU (should fail validation before dladm)
+    let result = actor.set_mtu("fake_link".to_string(), 500).await;
+    assert!(result.is_err(), "MTU < 576 should be rejected");
+
+    let result = actor.set_mtu("fake_link".to_string(), 10000).await;
+    assert!(result.is_err(), "MTU > 9000 should be rejected");
+
+    // Valid MTU but fake link - will fail at dladm level
+    let result = actor.set_mtu("nonexistent_link".to_string(), 1500).await;
+    // This will fail because the link doesn't exist, but validation passed
+    assert!(result.is_err());
+}

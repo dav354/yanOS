@@ -48,6 +48,17 @@ pub enum NetworkMessage {
         gateway: String,
         resp: oneshot::Sender<Result<(), AppError>>,
     },
+    /// Set MTU on a physical link
+    SetMtu {
+        link: String,
+        mtu: u32,
+        resp: oneshot::Sender<Result<(), AppError>>,
+    },
+    /// Set hostname
+    SetHostname {
+        hostname: String,
+        resp: oneshot::Sender<Result<(), AppError>>,
+    },
 }
 
 /// Handle to communicate with the NetworkActor.
@@ -154,6 +165,30 @@ impl NetworkActorHandle {
             AppError::ServiceUnavailable(format!("Network actor channel closed: {e}"))
         })?
     }
+
+    /// Set MTU on a physical link.
+    pub async fn set_mtu(&self, link: String, mtu: u32) -> Result<(), AppError> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(NetworkMessage::SetMtu { link, mtu, resp })
+            .await
+            .map_err(|e| AppError::ServiceUnavailable(format!("Network actor unavailable: {e}")))?;
+        rx.await.map_err(|e| {
+            AppError::ServiceUnavailable(format!("Network actor channel closed: {e}"))
+        })?
+    }
+
+    /// Set the system hostname.
+    pub async fn set_hostname(&self, hostname: String) -> Result<(), AppError> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(NetworkMessage::SetHostname { hostname, resp })
+            .await
+            .map_err(|e| AppError::ServiceUnavailable(format!("Network actor unavailable: {e}")))?;
+        rx.await.map_err(|e| {
+            AppError::ServiceUnavailable(format!("Network actor channel closed: {e}"))
+        })?
+    }
 }
 
 /// Start the NetworkActor and return a handle.
@@ -228,6 +263,25 @@ pub fn start_network_actor() -> NetworkActorHandle {
                         "Setting default gateway"
                     );
                     let result = adapters::network::set_default_gateway(&gateway);
+                    let _ = resp.send(result);
+                }
+                NetworkMessage::SetMtu { link, mtu, resp } => {
+                    info!(
+                        target: "yanos::network_actor",
+                        %link,
+                        mtu,
+                        "Setting MTU"
+                    );
+                    let result = adapters::network::set_mtu(&link, mtu);
+                    let _ = resp.send(result);
+                }
+                NetworkMessage::SetHostname { hostname, resp } => {
+                    info!(
+                        target: "yanos::network_actor",
+                        %hostname,
+                        "Setting hostname"
+                    );
+                    let result = adapters::network::set_hostname(&hostname);
                     let _ = resp.send(result);
                 }
             }

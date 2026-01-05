@@ -32,6 +32,8 @@ pub use state::AppState;
         network::update_config,
         network::set_address,
         network::set_dhcp,
+        network::set_mtu,
+        network::set_hostname,
         // Package routes
         resources::list_packages,
         resources::list_updates,
@@ -60,6 +62,8 @@ pub use state::AppState;
             crate::core::NetworkConfig,
             network::SetAddressRequest,
             network::UpdateConfigRequest,
+            network::SetMtuRequest,
+            network::SetHostnameRequest,
             network::SuccessResponse,
         )
     ),

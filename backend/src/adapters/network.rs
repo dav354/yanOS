@@ -335,6 +335,44 @@ fn read_hostname() -> String {
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
+/// Set hostname in /etc/nodename and apply via hostname(1).
+pub fn set_hostname(hostname: &str) -> Result<(), AppError> {
+    debug!(target: "yanos::network", hostname, "Setting hostname");
+
+    // Validate hostname (basic check)
+    if hostname.is_empty() {
+        return Err(AppError::BadRequest("Hostname cannot be empty".to_string()));
+    }
+    if hostname.len() > 253 {
+        return Err(AppError::BadRequest("Hostname too long (max 253 chars)".to_string()));
+    }
+    if !hostname.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.') {
+        return Err(AppError::BadRequest(
+            "Hostname can only contain alphanumeric characters, hyphens, and dots".to_string()
+        ));
+    }
+
+    // Write to /etc/nodename
+    fs::write("/etc/nodename", format!("{}\n", hostname))
+        .map_err(|e| AppError::InternalServerError(format!("Failed to write hostname: {e}")))?;
+
+    // Apply immediately via hostname command
+    let output = Command::new("hostname")
+        .arg(hostname)
+        .output()
+        .map_err(|e| AppError::InternalServerError(format!("Failed to run hostname: {e}")))?;
+
+    if !output.status.success() {
+        warn!(
+            target: "yanos::network",
+            "hostname command failed (will apply on reboot)"
+        );
+    }
+
+    debug!(target: "yanos::network", hostname, "Hostname configured");
+    Ok(())
+}
+
 // =============================================================================
 // Write Operations
 // =============================================================================
@@ -464,6 +502,38 @@ pub fn set_dns_config(servers: &[String], search: &[String]) -> Result<(), AppEr
     fs::rename(temp_path, "/etc/resolv.conf")
         .map_err(|e| AppError::InternalServerError(format!("Failed to update resolv.conf: {e}")))?;
 
+    Ok(())
+}
+
+/// Set MTU on a physical link via dladm.
+///
+/// Uses `dladm set-linkprop -p mtu=<value> <link>` to configure MTU.
+/// Valid MTU range is typically 576-9000 (jumbo frames).
+pub fn set_mtu(link: &str, mtu: u32) -> Result<(), AppError> {
+    debug!(target: "yanos::network", link, mtu, "Setting MTU");
+
+    // Validate MTU range
+    if mtu < 576 || mtu > 9000 {
+        return Err(AppError::BadRequest(format!(
+            "MTU must be between 576 and 9000, got {}",
+            mtu
+        )));
+    }
+
+    let output = Command::new("dladm")
+        .args(["set-linkprop", "-p", &format!("mtu={}", mtu), link])
+        .output()
+        .map_err(|e| AppError::InternalServerError(format!("Failed to run dladm: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::InternalServerError(format!(
+            "Failed to set MTU on {}: {}",
+            link, stderr
+        )));
+    }
+
+    debug!(target: "yanos::network", link, mtu, "MTU configured successfully");
     Ok(())
 }
 
