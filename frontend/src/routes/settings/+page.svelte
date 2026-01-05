@@ -190,10 +190,10 @@
     });
 </script>
 
-<section class="p-6 space-y-8">
+<section class="space-y-6">
     <header>
         <h1 class="text-2xl font-bold text-text-main">{i18n.t('settings.title')}</h1>
-        <p class="text-text-muted">{i18n.t('settings.subtitle')}</p>
+        <p class="text-text-muted text-sm mt-1">{i18n.t('settings.subtitle')}</p>
     </header>
 
     <section id="ui" class="space-y-4 border border-border-main rounded bg-bg-card p-4">

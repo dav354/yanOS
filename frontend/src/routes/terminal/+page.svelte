@@ -141,8 +141,8 @@
     });
 </script>
 
-<div class="h-full flex flex-col p-4 space-y-4">
-    <h1 class="text-3xl font-bold text-text-main">Web Terminal</h1>
+<div class="h-full flex flex-col space-y-4">
+    <h1 class="text-2xl font-bold text-text-main">Web Terminal</h1>
     
     <div class="flex-1 bg-bg-sidebar rounded-lg overflow-hidden shadow-inner border border-border-main relative">
         <div bind:this={terminalContainer} class="absolute inset-0 p-2"></div>

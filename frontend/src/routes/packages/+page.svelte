@@ -95,7 +95,7 @@
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h1 class="text-3xl font-bold text-text-main">{i18n.t('packages.title')}</h1>
+        <h1 class="text-2xl font-bold text-text-main">{i18n.t('packages.title')}</h1>
         <div class="flex gap-2">
             <button onclick={checkUpdates} class="text-text-main hover:text-primary px-3 py-2 rounded text-sm font-medium transition-colors border border-border-main hover:border-primary">
                 {i18n.t('packages.checkUpdates')}
