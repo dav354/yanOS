@@ -2,7 +2,7 @@
     import { auth } from '$lib/auth.svelte.js';
     import { i18n } from '$lib/i18n.svelte.js';
 
-    const severityOrder = { info: 0, warn: 1, error: 2 };
+    const severityOrder = { trace: -1, debug: 0, info: 1, warn: 2, error: 3 };
     let entries = $state([]);
     let seen = $state(new Set());
     let filterLevel = $state('all');
@@ -46,8 +46,23 @@
         const t = (event.type || '').toLowerCase();
         if (t.includes('failed') || t.includes('error')) return 'error';
         if (t.includes('down') || t.includes('warn')) return 'warn';
-        if (event.line && /error|fail/i.test(event.line)) return 'error';
-        if (event.line && /warn/i.test(event.line)) return 'warn';
+
+        // For system_log events, extract level from the log line
+        if (event.line) {
+            // Match patterns like "11:21:04 DEBUG yanos::pkg:" or just "ERROR" at word boundary
+            const levelMatch = event.line.match(/\b(ERROR|WARN|INFO|DEBUG|TRACE)\b/i);
+            if (levelMatch) {
+                const level = levelMatch[1].toLowerCase();
+                if (level === 'error' || level === 'fail') return 'error';
+                if (level === 'warn' || level === 'warning') return 'warn';
+                if (level === 'debug') return 'debug';
+                if (level === 'trace') return 'trace';
+                return 'info';
+            }
+            // Fallback pattern matching
+            if (/error|fail/i.test(event.line)) return 'error';
+            if (/warn/i.test(event.line)) return 'warn';
+        }
         return 'info';
     }
 
@@ -84,7 +99,11 @@
         // Strip Rust tracing timestamp and level if present
         // Matches: 2025-12-13T12:42:18.351226Z INFO ...
         msg = msg.replace(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s+(INFO|WARN|ERROR|DEBUG|TRACE)\s+/, '');
-        
+
+        // Strip compact time and level format from tracing
+        // Matches: 11:32:11 INFO ... or 11:32:11.123 DEBUG ...
+        msg = msg.replace(/^\d{2}:\d{2}:\d{2}(\.\d+)?\s+(INFO|WARN|ERROR|DEBUG|TRACE)\s+/, '');
+
         // Strip Syslog header
         // Matches: Dec 9 09:36:37 localhost unix: ...
         msg = msg.replace(/^[A-Z][a-z]{2}\s+\d+\s+\d{2}:\d{2}:\d{2}\s+\S+\s+[^:]+:\s+/, '');
@@ -318,7 +337,7 @@
     });
 </script>
 
-<section class="flex flex-col h-full p-6 gap-4 overflow-hidden">
+<section class="flex flex-col h-full gap-4 overflow-hidden">
     <header class="flex items-center justify-between shrink-0">
         <div>
             <h1 class="text-2xl font-bold text-text-main">{i18n.t('logs.title')}</h1>
@@ -348,6 +367,8 @@
                 <option value="error">{i18n.t('logs.filterError')}</option>
                 <option value="warn">{i18n.t('logs.filterWarn')}</option>
                 <option value="info">{i18n.t('logs.filterInfo')}</option>
+                <option value="debug">Debug</option>
+                <option value="trace">Trace</option>
             </select>
             <select
                 class="border border-border-main bg-bg-card text-text-main text-sm rounded px-2 py-1"
@@ -392,6 +413,8 @@
                                         <span class={`px-1.5 py-0.5 rounded text-xs font-bold uppercase ${
                                             entry.level === 'error' ? 'bg-red-100 text-red-700' :
                                             entry.level === 'warn' ? 'bg-amber-100 text-amber-700' :
+                                            entry.level === 'debug' ? 'bg-gray-100 text-gray-600' :
+                                            entry.level === 'trace' ? 'bg-gray-50 text-gray-400' :
                                             'bg-blue-50 text-blue-700'
                                         }`}>
                                             {entry.level}
