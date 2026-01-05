@@ -74,14 +74,27 @@ fn test_refresh_catalog() {
 
     match result {
         Ok(()) => {
+            // Success on illumos with valid pkg repos
             println!("pkg refresh succeeded");
         }
         Err(AppError::InternalServerError(msg)) => {
-            // Expected if pkg command fails
+            // Expected if pkg command fails (non-illumos or pkg error)
+            assert!(
+                !msg.is_empty(),
+                "Error message should not be empty"
+            );
             println!("pkg refresh failed (expected on non-illumos): {}", msg);
         }
+        Err(AppError::ServiceUnavailable(msg)) => {
+            // SSL or network errors return ServiceUnavailable
+            assert!(
+                !msg.is_empty(),
+                "Error message should not be empty"
+            );
+            println!("pkg refresh unavailable: {}", msg);
+        }
         Err(e) => {
-            println!("pkg refresh returned error: {:?}", e);
+            panic!("Unexpected error type from refresh_catalog: {:?}", e);
         }
     }
 }
@@ -252,9 +265,20 @@ fn test_refresh_catalog_error_handling() {
     // This test verifies the function handles errors gracefully
     // On a system without pkg, it should return an error without panicking
     let result = pkg::refresh_catalog();
-    // Either succeeds or returns appropriate error
-    match result {
-        Ok(()) => println!("Refresh succeeded"),
-        Err(e) => println!("Refresh error (expected on non-illumos): {:?}", e),
+
+    // Verify the result is a valid variant (success or expected error types)
+    match &result {
+        Ok(()) => {
+            // Success is valid on illumos with working repos
+        }
+        Err(AppError::InternalServerError(msg)) => {
+            assert!(!msg.is_empty(), "InternalServerError should have a message");
+        }
+        Err(AppError::ServiceUnavailable(msg)) => {
+            assert!(!msg.is_empty(), "ServiceUnavailable should have a message");
+        }
+        Err(e) => {
+            panic!("Unexpected error type: {:?}", e);
+        }
     }
 }

@@ -375,9 +375,10 @@ async fn test_rapid_metrics_subscriptions() {
         // rx is dropped immediately
     }
 
-    // Should still work
+    // Should still work after rapid subscribe/unsubscribe
     let rx = metrics_state.broadcast_tx.subscribe();
-    assert!(rx.is_empty() || !rx.is_empty()); // Just verify no panic
+    // New subscription should start empty (no buffered messages)
+    assert!(rx.is_empty(), "Fresh subscription should have no pending messages");
 }
 
 /// Test concurrent event types.
