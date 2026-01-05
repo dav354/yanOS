@@ -91,7 +91,8 @@
 - [x] **Read:** Parse `/etc/defaultrouter` for gateway.
 - [x] **Write (NetworkActor):** Set static IP, enable DHCP, update DNS, update gateway.
 - [x] **UI:** Network configuration page with per-interface editing.
-- [ ] **Write:** MTU configuration.
+- [x] **Write:** MTU configuration.
+- [x] **Write:** Hostname configuration.
 - [ ] **Future:** VLAN and bond/aggregation support.
 
 ---
