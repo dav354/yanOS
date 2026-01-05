@@ -41,9 +41,24 @@ pub fn refresh_catalog() -> Result<(), AppError> {
             Ok(())
         }
         Ok(out) => {
-            let err = String::from_utf8_lossy(&out.stderr);
-            warn!(target: "yanos::pkg", stderr = %err, "pkg refresh failed");
-            Err(AppError::InternalServerError(format!("pkg refresh failed: {}", err)))
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            warn!(target: "yanos::pkg", stderr = %stderr, "pkg refresh failed");
+
+            // Detect SSL certificate errors and provide actionable message
+            if stderr.contains("E_SSL") || stderr.contains("SSL certificate problem") {
+                let msg = if stderr.contains("certificate is not yet valid") {
+                    "Catalog refresh failed: SSL certificate is not yet valid. \
+                     Please verify system time is correct."
+                } else if stderr.contains("certificate has expired") {
+                    "Catalog refresh failed: SSL certificate has expired. \
+                     Consider updating CA certificates."
+                } else {
+                    "Catalog refresh failed: SSL error. Check network and CA certificates."
+                };
+                return Err(AppError::ServiceUnavailable(msg.to_string()));
+            }
+
+            Err(AppError::InternalServerError(format!("pkg refresh failed: {}", stderr)))
         }
         Err(e) => {
             warn!(target: "yanos::pkg", error = %e, "pkg refresh execution failed");
@@ -139,12 +154,28 @@ pub fn get_pkg_updates() -> Result<Vec<PackageInfo>, AppError> {
                 debug!(target: "yanos::pkg", "No updates available");
                 return Ok(vec![]);
             }
+            let stderr = String::from_utf8_lossy(&out.stderr);
             warn!(
                 target: "yanos::pkg",
                 code = ?out.status.code(),
-                stderr = %String::from_utf8_lossy(&out.stderr),
+                stderr = %stderr,
                 "pkg list -u failed"
             );
+
+            // Detect SSL certificate errors and provide actionable message
+            if stderr.contains("E_SSL") || stderr.contains("SSL certificate problem") {
+                let msg = if stderr.contains("certificate is not yet valid") {
+                    "Package repository SSL error: certificate is not yet valid. \
+                     Please verify system time is correct (check with 'date' command)."
+                } else if stderr.contains("certificate has expired") {
+                    "Package repository SSL error: certificate has expired. \
+                     Consider updating CA certificates or check repository status."
+                } else {
+                    "Package repository SSL error. Check network connectivity and CA certificates."
+                };
+                return Err(AppError::ServiceUnavailable(msg.to_string()));
+            }
+
             return Err(AppError::ServiceUnavailable(
                 "Failed to query pkg updates".to_string(),
             ));
